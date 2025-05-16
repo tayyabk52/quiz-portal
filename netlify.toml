@@ -2,6 +2,9 @@
 
 # Build settings
 [build]
+  # Base directory (where package.json is located)
+  base = "quiz-portal"
+  
   # Directory to use as the publishing directory
   publish = "build"
   
