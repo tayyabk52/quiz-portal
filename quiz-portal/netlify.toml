@@ -1,0 +1,39 @@
+# Netlify configuration file
+
+# Build settings
+[build]
+  # Directory to use as the publishing directory
+  publish = "build"
+  
+  # Default build command
+  command = "CI= npm run build"
+
+# Redirects and headers
+[[redirects]]
+  # SPA redirect for client-side routing
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers to send with files
+[[headers]]
+  # Define headers for all files
+  for = "/*"
+    [headers.values]
+    # Prevent site from being embedded in iframes (security)
+    X-Frame-Options = "DENY"
+    # Enable XSS protection
+    X-XSS-Protection = "1; mode=block"
+    # Prevent MIME type sniffing
+    X-Content-Type-Options = "nosniff"
+    # Content Security Policy
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.gstatic.com/ https://apis.google.com/ https://*.firebaseio.com https://www.googletagmanager.com 'unsafe-inline'; connect-src 'self' wss://*.firebaseio.com https://*.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com; font-src 'self' https://fonts.gstatic.com;"
+
+# Environment variable configuration
+[build.environment]
+  # Set Node.js version
+  NODE_VERSION = "16"
+
+# Form handling
+[build.processing.html]
+  pretty_urls = true
