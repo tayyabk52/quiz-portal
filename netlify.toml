@@ -33,6 +33,8 @@
 [build.environment]
   # Set Node.js version
   NODE_VERSION = "16"
+  # CI=false prevents treating warnings as errors during build
+  CI = "false"
 
 # Form handling
 [build.processing.html]

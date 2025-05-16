@@ -88,17 +88,32 @@ quiz-portal/
 
 ### Deployment to Netlify
 
-1. Build the project:
+1. Set up your environment variables in a `.env` file:
+   ```
+   REACT_APP_FIREBASE_API_KEY=YOUR_API_KEY
+   REACT_APP_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+   REACT_APP_FIREBASE_PROJECT_ID=your-project-id
+   REACT_APP_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+   REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+   REACT_APP_FIREBASE_APP_ID=your-app-id
+   REACT_APP_FIREBASE_MEASUREMENT_ID=your-measurement-id
+   ```
+
+2. Build the project:
    ```
    npm run build
    ```
 
-2. Deploy to Netlify using one of these methods:
+3. Deploy to Netlify using one of these methods:
    - Connect to your GitHub repository in Netlify dashboard
    - Use Netlify CLI: `netlify deploy --prod`
    - Drag and drop the `build` folder to Netlify dashboard
 
-3. Set up environment variables in Netlify dashboard for Firebase configuration
+4. Set up environment variables in Netlify dashboard for Firebase configuration
+   - Go to Site Settings > Build & Deploy > Environment
+   - Add all the Firebase environment variables from your .env file
+
+For detailed deployment instructions, see [NETLIFY_DEPLOYMENT.md](./NETLIFY_DEPLOYMENT.md)
 
 ## Admin Access
 

@@ -3,6 +3,11 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
+// Log warning if environment variables are missing
+if (!process.env.REACT_APP_FIREBASE_API_KEY) {
+  console.warn("Firebase environment variables are missing. Make sure you have a .env.local file in your project root. See FIREBASE_SETUP.md for instructions.");
+}
+
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
  const firebaseConfig = {

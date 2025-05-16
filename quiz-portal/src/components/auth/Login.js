@@ -82,7 +82,6 @@ const Login = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -91,18 +90,33 @@ const Login = () => {
       return;
     }
     
+    // Validate username format (no spaces or special characters except - and _)
+    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (!usernameRegex.test(username)) {
+      setError('Username can only contain letters, numbers, underscores and hyphens');
+      return;
+    }
+    
     setLoading(true);
     setError('');
     
     try {
       // Convert username to email format for Firebase Auth
-      const email = `${username}@quizportal.com`;
+      const email = `${username.trim()}@quizportal.com`;
       
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/instructions');
     } catch (err) {
       console.error('Login error:', err);
-      setError('Invalid username or password. Please try again.');
+      
+      // Provide more specific error messages
+      if (err.code === 'auth/invalid-email') {
+        setError('Invalid username format. Please try again.');
+      } else if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setError('Invalid username or password. Please try again.');
+      } else {
+        setError(`Authentication error: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
