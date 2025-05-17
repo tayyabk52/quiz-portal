@@ -21,7 +21,8 @@ export const convertDriveUrl = (driveUrl) => {
   if (driveUrl.includes('drive.google.com/file/d/')) {
     const fileIdMatch = driveUrl.match(/\/file\/d\/([^\/]+)/);
     if (fileIdMatch && fileIdMatch[1]) {
-      return `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+      const fileId = fileIdMatch[1].split('/')[0]; // Remove any trailing path components
+      return `https://drive.google.com/uc?export=view&id=${fileId}`;
     }
   }
   
@@ -39,6 +40,18 @@ export const convertDriveUrl = (driveUrl) => {
     // These don't typically work directly as image sources
     // Return original URL and it will need to be manually fixed
     return driveUrl;
+  }
+    // Extract file ID from any Google Drive URL with "usp=sharing"
+  const sharingMatch = driveUrl.match(/\/d\/([^\/\?]+)/);
+  if (sharingMatch && sharingMatch[1]) {
+    return `https://drive.google.com/uc?export=view&id=${sharingMatch[1]}`;
+  }
+  
+  // Handle the exact format from your Firebase database (from screenshot)
+  if (driveUrl.includes('https://drive.google.com/file/d/') && driveUrl.includes('usp=sharing')) {
+    // Example: "https://drive.google.com/file/d/1L20Q_IzazNbHR0kIXPZ9jQ_AoQGNxFm9/view?usp=sharing"
+    const fileId = driveUrl.split('/file/d/')[1].split('/')[0];
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
   }
   
   return driveUrl;

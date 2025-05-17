@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import { signOut } from 'firebase/auth';
-import { auth } from '../../firebase/config';
+import { auth, db } from '../../firebase/config';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const InstructionsContainer = styled.div`
   max-width: 800px;
@@ -65,8 +66,51 @@ const HighlightTitle = styled.h3`
 
 const Instructions = () => {
   const navigate = useNavigate();
+  const [hasAttemptedQuiz, setHasAttemptedQuiz] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Check if the user has already attempted the quiz
+  useEffect(() => {
+    const checkPreviousAttempts = async () => {
+      try {
+        setLoading(true);
+        const user = auth.currentUser;
+        
+        if (!user) {
+          console.error('No authenticated user');
+          navigate('/');
+          return;
+        }
+        
+        // Query Firestore for any results by this user
+        const q = query(
+          collection(db, 'results'),
+          where('userEmail', '==', user.email)
+        );
+        
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          setHasAttemptedQuiz(true);
+        }
+        
+        setLoading(false);
+      } catch (err) {
+        console.error('Error checking quiz attempts:', err);
+        setError('Failed to check your quiz history. Please try again later.');
+        setLoading(false);
+      }
+    };
+    
+    checkPreviousAttempts();
+  }, [navigate]);
 
   const handleStartQuiz = () => {
+    if (hasAttemptedQuiz) {
+      alert('You have already taken this quiz. Only one attempt is allowed.');
+      return;
+    }
     navigate('/quiz');
   };
 
@@ -78,15 +122,47 @@ const Instructions = () => {
       console.error('Logout error:', error);
     }
   };
+  if (loading) {
+    return (
+      <InstructionsContainer>
+        <Title>Loading...</Title>
+        <p>Please wait while we check your quiz status.</p>
+      </InstructionsContainer>
+    );
+  }
+  
+  if (error) {
+    return (
+      <InstructionsContainer>
+        <Title>Error</Title>
+        <HighlightBox>
+          <p>{error}</p>
+        </HighlightBox>
+        <ButtonContainer>
+          <Button secondary onClick={handleLogout}>
+            Logout
+          </Button>
+        </ButtonContainer>
+      </InstructionsContainer>
+    );
+  }
 
   return (
     <InstructionsContainer>
       <Title>Quiz Instructions</Title>
       
-      <HighlightBox>
-        <HighlightTitle>Important!</HighlightTitle>
-        <p>Please read all instructions carefully before starting the quiz. Once you begin, you cannot pause or restart the quiz.</p>
-      </HighlightBox>
+      {hasAttemptedQuiz ? (
+        <HighlightBox>
+          <HighlightTitle>Quiz Already Completed</HighlightTitle>
+          <p>You have already taken this quiz. Only one attempt is allowed per user.</p>
+          <p>If you believe this is an error, please contact your instructor.</p>
+        </HighlightBox>
+      ) : (
+        <HighlightBox>
+          <HighlightTitle>Important!</HighlightTitle>
+          <p>Please read all instructions carefully before starting the quiz. Once you begin, you cannot pause or restart the quiz.</p>
+        </HighlightBox>
+      )}
       
       <InstructionsList>
         <InstructionItem>
@@ -105,6 +181,9 @@ const Instructions = () => {
           <strong>Results:</strong> Your score will be displayed immediately after completing the quiz. Results will also be stored for future reference.
         </InstructionItem>
         <InstructionItem>
+          <strong>Attempts:</strong> You are allowed only one attempt at this quiz. Once completed, you cannot take it again.
+        </InstructionItem>
+        <InstructionItem>
           <strong>Security Rules:</strong> You must not navigate away from the quiz tab or window. A warning will be issued for the first violation. The second violation will result in automatic submission of the quiz.
         </InstructionItem>
         <InstructionItem>
@@ -112,17 +191,25 @@ const Instructions = () => {
         </InstructionItem>
       </InstructionsList>
       
-      <HighlightBox>
-        <p>By clicking "Start Quiz," you acknowledge that you have read and understood all the instructions provided above.</p>
-      </HighlightBox>
+      {!hasAttemptedQuiz && (
+        <HighlightBox>
+          <p>By clicking "Start Quiz," you acknowledge that you have read and understood all the instructions provided above.</p>
+        </HighlightBox>
+      )}
       
       <ButtonContainer>
         <Button secondary onClick={handleLogout}>
           Logout
         </Button>
-        <Button onClick={handleStartQuiz}>
-          Start Quiz
-        </Button>
+        {!hasAttemptedQuiz ? (
+          <Button onClick={handleStartQuiz}>
+            Start Quiz
+          </Button>
+        ) : (
+          <Button secondary disabled>
+            Already Completed
+          </Button>
+        )}
       </ButtonContainer>
     </InstructionsContainer>
   );

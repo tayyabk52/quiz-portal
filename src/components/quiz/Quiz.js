@@ -9,7 +9,36 @@ import { convertDriveUrl } from '../../utils/imageUtils';
 // Component to handle question images with error handling
 const QuestionImageComponent = ({ imageUrl }) => {
   const [imageError, setImageError] = useState(false);
+  const [alternativeAttempted, setAlternativeAttempted] = useState(false);
+  
+  // First attempt with converted URL
   const convertedUrl = convertDriveUrl(imageUrl);
+  
+  // For debugging purposes
+  useEffect(() => {
+    console.log('Original image URL:', imageUrl);
+    console.log('Converted image URL:', convertedUrl);
+  }, [imageUrl, convertedUrl]);
+  
+  // Try alternative format if the first one fails
+  const handleImageError = () => {
+    if (!alternativeAttempted) {
+      // Try an alternative format before giving up
+      setAlternativeAttempted(true);
+      
+      // Don't set error yet, it will try the second format
+      console.log('First image format failed, trying alternative...');
+    } else {
+      // Both attempts failed
+      setImageError(true);
+      console.log('All image loading attempts failed');
+    }
+  };
+  
+  // If first attempt failed, try direct format
+  const imageSrc = alternativeAttempted ? 
+    imageUrl.replace(/\/file\/d\/(.+?)\/view.+/, '/uc?export=view&id=$1') : 
+    convertedUrl;
   
   return (
     <ImageContainer>
@@ -19,9 +48,10 @@ const QuestionImageComponent = ({ imageUrl }) => {
         </ImageErrorMessage>
       ) : (
         <QuestionImage 
-          src={convertedUrl} 
+          src={imageSrc} 
           alt="Question illustration" 
-          onError={() => setImageError(true)}
+          onError={handleImageError}
+          crossOrigin="anonymous"
         />
       )}
     </ImageContainer>
@@ -165,10 +195,9 @@ const Quiz = () => {
     };
     
     fetchQuestions();
-  }, []);
-  // Initialize timer when a new question is displayed
+  }, []);  // Initialize timer when a new question is displayed
   useEffect(() => {
-    if (currentQuestionIndex < quizData.length) {
+    if (quizData.length > 0 && currentQuestionIndex < quizData.length) {
       const timeLimit = quizData[currentQuestionIndex].timeLimit;
       setTimer(timeLimit);
       
@@ -195,7 +224,7 @@ const Quiz = () => {
         quizSecurity.deactivate();
       };
     }
-  }, [currentQuestionIndex]);
+  }, [currentQuestionIndex, quizData, answers]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOptionSelect = (optionIndex) => {
     setSelectedOption(optionIndex);
