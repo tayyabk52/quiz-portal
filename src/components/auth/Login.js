@@ -214,7 +214,7 @@ const LogoIndicator = styled.div`
   position: relative;
   
   &:before {
-    content: 'Q';
+    content: 'Quiz';
     font-size: 32px;
     font-weight: bold;
     color: var(--primary-color);
