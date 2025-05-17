@@ -614,19 +614,36 @@ const Admin = () => {
               value={formData.imageUrl}
               onChange={handleImageUrlChange}
               placeholder="Paste your Google Drive shared image URL here"
-            />
-            <div style={{ fontSize: '0.85rem', marginTop: '5px', color: 'var(--light-text)' }}>
-              Tips: 
+            />            <div style={{ fontSize: '0.85rem', marginTop: '5px', color: 'var(--light-text)' }}>
+              Tips for Google Drive Images: 
               <ul>
                 <li>Upload image to Google Drive</li>
                 <li>Right-click on the file and select "Get link"</li>
                 <li>Make sure it's set to "Anyone with the link can view"</li>
                 <li>Copy and paste the shared link here</li>
               </ul>
-            </div>            {formData.imageUrl && (
-              <ImagePreview>
-                <ImageLoader src={formData.imageUrl} alt="Preview" />
-              </ImagePreview>
+            </div>
+            {formData.imageUrl && (
+              <>
+                <ImagePreview>
+                  <ImageLoader src={formData.imageUrl} alt="Preview" />
+                </ImagePreview>
+                <div style={{ marginTop: '10px', fontSize: '0.85rem', color: 'var(--light-text)' }}>
+                  <details>
+                    <summary>Image loading troubleshooting</summary>
+                    <p>If the image doesn't load correctly, try these direct URLs:</p>
+                    {formData.imageUrl.includes('drive.google.com') && (() => {
+                      const fileId = formData.imageUrl.match(/[-\w]{25,}/);
+                      return fileId ? (
+                        <ul style={{ marginTop: '5px' }}>
+                          <li><a href={`https://lh3.googleusercontent.com/d/${fileId[0]}`} target="_blank" rel="noopener noreferrer">Direct link format 1</a></li>
+                          <li><a href={`https://drive.google.com/thumbnail?id=${fileId[0]}&sz=w1000`} target="_blank" rel="noopener noreferrer">Direct link format 2</a></li>
+                        </ul>
+                      ) : <p>Could not extract file ID from URL</p>
+                    })()}
+                  </details>
+                </div>
+              </>
             )}
           </FormGroup>
           
