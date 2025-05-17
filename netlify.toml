@@ -15,12 +15,6 @@
   functions = "functions"
 
 # Redirects and headers
-[[redirects]]
-  # API functions redirect
-  from = "/.netlify/functions/*"
-  to = "/.netlify/functions/:splat"
-  status = 200
-  force = true
 
 # API endpoints for admin functions
 [[redirects]]

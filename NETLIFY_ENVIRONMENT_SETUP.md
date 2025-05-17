@@ -13,6 +13,7 @@ FIREBASE_PROJECT_ID=your-firebase-project-id
 FIREBASE_CLIENT_EMAIL=your-service-account-email
 FIREBASE_PRIVATE_KEY=your-private-key-with-quotes
 ADMIN_EMAIL_PATTERN=admin
+NODE_VERSION=16
 ```
 
 **Important Note about FIREBASE_PRIVATE_KEY**
@@ -27,7 +28,7 @@ For the `FIREBASE_PRIVATE_KEY` variable:
 Additionally, set these frontend environment variables:
 
 ```
-REACT_APP_API_URL=https://your-netlify-site.netlify.app/.netlify/functions
+REACT_APP_API_URL=/api
 REACT_APP_FIREBASE_API_KEY=your-firebase-api-key
 REACT_APP_FIREBASE_AUTH_DOMAIN=your-firebase-auth-domain
 REACT_APP_FIREBASE_PROJECT_ID=your-firebase-project-id
@@ -35,6 +36,8 @@ REACT_APP_FIREBASE_STORAGE_BUCKET=your-firebase-storage-bucket
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your-firebase-messaging-sender-id
 REACT_APP_FIREBASE_APP_ID=your-firebase-app-id
 ```
+
+> **Note:** For the `REACT_APP_API_URL`, we use `/api` which will work with our Netlify redirects. Do not use the full URL with `.netlify/functions` as this would bypass our redirect rules.
 
 ## Testing Your Configuration
 

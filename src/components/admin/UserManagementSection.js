@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { createMultipleUsers, resetUserPassword, syncUsersToFirestore, auth, db } from '../../firebase/config';
+import { createMultipleUsers, resetUserPassword, syncUsersToFirestore, deleteUsers, auth, db } from '../../firebase/config';
 import { parseStudentAccountsFromCSV, validateUserData } from '../../utils/csvUtils';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
-// API URL from environment variables or default to localhost in development
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+// API URL from environment variables or default to the deployed Netlify functions
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 // Styled components for User Management
 const FileUploadArea = styled.div`
