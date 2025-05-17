@@ -1,5 +1,5 @@
 // Netlify function for bulk user deletion
-const { adminFunctions } = require('../../src/server/admin');
+const { adminFunctions } = require('./admin');
 const { createResponse, withErrorHandling, withAdminAuth } = require('./utils');
 
 // Handler for the bulk-delete-users function

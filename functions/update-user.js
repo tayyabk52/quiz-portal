@@ -1,5 +1,5 @@
 // Netlify function for updating user information
-const { admin } = require('../../src/server/admin');
+const { admin } = require('./admin');
 const { createResponse, withErrorHandling, withAdminAuth } = require('./utils');
 
 // Handler for the update-user function

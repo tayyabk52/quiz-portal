@@ -1,5 +1,5 @@
 // Netlify function to delete a specific user
-const { adminFunctions } = require('../../src/server/admin');
+const { adminFunctions } = require('./admin');
 const { createResponse, withErrorHandling, withAdminAuth } = require('./utils');
 
 // Handler for the delete-user function

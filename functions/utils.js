@@ -52,7 +52,7 @@ const withAdminAuth = (handler) => {
       const idToken = authorization.split('Bearer ')[1];
       
       // Import admin
-      const { admin, verifyAdminToken } = require('../src/server/admin');
+      const { admin, verifyAdminToken } = require('./admin');
       
       try {
         // Verify admin token

@@ -19,9 +19,12 @@ NODE_VERSION=16
 **Important Note about FIREBASE_PRIVATE_KEY**
 
 For the `FIREBASE_PRIVATE_KEY` variable:
-- Include the entire private key value including quotation marks
-- Make sure to include all line breaks (Netlify will handle these)
-- Copy directly from your service account JSON file
+- Copy the entire private key value **exactly** as it appears in your service account JSON file
+- Include the quotation marks at the beginning and end
+- Make sure to include all line breaks (replace `\n` with actual line breaks)
+- Example format: `"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANB...\n-----END PRIVATE KEY-----\n"`
+
+If you're copying from the JSON file directly, you may need to manually replace escaped newlines (`\\n`) with actual newlines and ensure quotation marks are preserved.
 
 ## Other Environment Variables
 
