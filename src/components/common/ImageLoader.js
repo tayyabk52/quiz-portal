@@ -138,11 +138,10 @@ const ImageLoader = ({
       onError();
     }
   };
-
   const handleImageLoad = () => {
     setLoading(false);
     onLoad();
-    console.log(`Image loaded successfully using attempt ${proxyIndex + 1}`);
+    console.log(`Image loaded successfully using attempt ${transformerIndex + 1}`);
   };
   return (
     <Container className={className}>
