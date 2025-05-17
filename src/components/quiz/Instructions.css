@@ -1,0 +1,120 @@
+/* Instructions page styling */
+.instructions-page {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, var(--grey-50) 0%, var(--grey-200) 100%);
+  position: relative;
+  overflow: hidden;
+  padding: 40px 0;
+}
+
+.instructions-page::before,
+.instructions-page::after {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  opacity: 0.1;
+  z-index: 0;
+}
+
+.instructions-page::before {
+  background: var(--primary-color);
+  top: -100px;
+  right: -100px;
+}
+
+.instructions-page::after {
+  background: var(--secondary-color);
+  bottom: -100px;
+  left: -100px;
+}
+
+/* Grid pattern background */
+.instructions-page {
+  background-image: 
+    linear-gradient(to right, rgba(66, 133, 244, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(66, 133, 244, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Loading animation */
+@keyframes pulse-loading {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+.loading-dots {
+  display: flex;
+  gap: 8px;
+}
+
+.loading-dot {
+  width: 12px;
+  height: 12px;
+  background-color: var(--primary-color);
+  border-radius: 50%;
+  animation: pulse-loading 1.5s infinite ease-in-out;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* Quiz status indicator */
+.quiz-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+}
+
+.quiz-status.available {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #2e7d32;
+  border: 1px solid rgba(76, 175, 80, 0.2);
+}
+
+.quiz-status.completed {
+  background-color: rgba(33, 150, 243, 0.1);
+  color: #1565c0;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+/* Instruction item styling */
+.instruction-icon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 15px;
+  font-weight: bold;
+  font-size: 14px;
+}
