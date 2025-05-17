@@ -95,12 +95,11 @@ export const parseStudentAccountsFromCSV = (csvContent) => {
 export const validateUserData = (users) => {
   const issues = [];
   const validUsers = [];
-  
-  users.forEach((user, index) => {
+    users.forEach((user, index) => {
     const userIssues = [];
     
     // Check email format
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(user.email)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(user.email)) {
       userIssues.push(`Invalid email format: ${user.email}`);
     }
     
