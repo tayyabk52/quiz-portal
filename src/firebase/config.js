@@ -10,7 +10,8 @@ import {
   reauthenticateWithCredential,
   sendPasswordResetEmail
 } from "firebase/auth";
-import { getFirestore, setDoc, doc, collection, getDocs, getDoc } from "firebase/firestore";
+import { getFirestore, setDoc, doc, collection, getDocs, getDoc, deleteDoc } from "firebase/firestore";
+import axios from 'axios';
 
 // Log warning if environment variables are missing
 if (!process.env.REACT_APP_FIREBASE_API_KEY) {
@@ -33,6 +34,62 @@ if (!process.env.REACT_APP_FIREBASE_API_KEY) {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// Admin API configuration
+const ADMIN_API_URL = process.env.REACT_APP_ADMIN_API_URL || 'http://localhost:5000/api';
+const ADMIN_API_KEY = process.env.REACT_APP_ADMIN_API_KEY;
+
+// Admin API utility functions
+const adminApi = {
+  // Get all users from Firebase Authentication
+  getAllUsers: async () => {
+    try {
+      const response = await axios.get(`${ADMIN_API_URL}/users`, {
+        headers: {
+          'x-api-key': ADMIN_API_KEY
+        }
+      });
+      return response.data.users;
+    } catch (error) {
+      console.error('Failed to get users from Admin API:', error);
+      throw new Error(error.response?.data?.message || 'Failed to fetch users');
+    }
+  },
+  
+  // Delete multiple users by UID
+  deleteUsers: async (uids) => {
+    try {
+      const response = await axios.post(`${ADMIN_API_URL}/users/delete`, {
+        uids
+      }, {
+        headers: {
+          'x-api-key': ADMIN_API_KEY
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to delete users via Admin API:', error);
+      throw new Error(error.response?.data?.message || 'Failed to delete users');
+    }
+  },
+  
+  // Generate password reset links for users
+  resetPasswords: async (emails) => {
+    try {
+      const response = await axios.post(`${ADMIN_API_URL}/users/reset-password`, {
+        emails
+      }, {
+        headers: {
+          'x-api-key': ADMIN_API_KEY
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to reset passwords via Admin API:', error);
+      throw new Error(error.response?.data?.message || 'Failed to reset passwords');
+    }
+  }
+};
 
 /**
  * Creates multiple user accounts in Firebase Auth
@@ -100,9 +157,10 @@ export const createMultipleUsers = async (users, onProgress = () => {}) => {
 };
 
 /**
- * Deletes multiple users from Firebase Auth
+ * Deletes multiple users from Firebase Auth using Admin SDK
  * 
  * @param {Array} emails - Array of user email addresses to delete
+ * @param {String} adminPassword - Admin password for authentication
  * @param {Function} onProgress - Callback function for progress updates
  * @returns {Promise<Object>} Results of the bulk operation
  */
@@ -122,61 +180,79 @@ export const deleteUsers = async (emails, adminPassword, onProgress = () => {}) 
     const credential = EmailAuthProvider.credential(adminEmail, adminPassword);
     await reauthenticateWithCredential(auth.currentUser, credential);
     
-    // Import additional function for Firestore deletion
-    const { deleteDoc } = require("firebase/firestore");
+    // First get the UIDs for all emails
+    // Try to get all users using Admin API
+    const allUsers = await adminApi.getAllUsers();
+    const userMap = new Map();
     
-    // Process users sequentially
-    for (let i = 0; i < emails.length; i++) {
-      const email = emails[i];
-      try {
-        // Delete user account
-        // Note: In a production app, you would use Firebase Admin SDK via a backend
-        // This is a simplified implementation for demonstration
-        
-        // First sign in as the user (this is a limitation of client-side Firebase)
-        await signInWithEmailAndPassword(auth, email, "temporary-password");
-        
-        // Delete the user's document from Firestore 'users' collection
-        try {
-          await deleteDoc(doc(db, "users", email));
-        } catch (firestoreError) {
-          console.warn(`Could not delete Firestore data for ${email}: ${firestoreError.message}`);
-        }
-        
-        // Delete the Auth user
-        await deleteUser(auth.currentUser);
-        
-        results.successful.push({
-          email: email
-        });
-        
-        // Update progress
-        onProgress({
-          processed: i + 1,
-          total: emails.length,
-          current: email,
-          success: true
-        });
-      } catch (error) {
+    allUsers.forEach(user => {
+      userMap.set(user.email, user.uid);
+    });
+    
+    // Create array of UIDs for users we want to delete
+    const uidsToDelete = [];
+    const emailsToProcess = [];
+    
+    emails.forEach(email => {
+      const uid = userMap.get(email);
+      if (uid) {
+        uidsToDelete.push(uid);
+        emailsToProcess.push(email);
+      } else {
         results.failed.push({
-          email: email,
-          error: error.message
+          email,
+          error: 'Could not find UID for this email'
         });
-        
-        // Update progress
-        onProgress({
-          processed: i + 1,
-          total: emails.length,
-          current: email,
-          success: false,
-          error: error.message
+      }
+    });
+    
+    // Delete the users using Admin API
+    if (uidsToDelete.length > 0) {
+      const deleteResults = await adminApi.deleteUsers(uidsToDelete);
+      
+      // Process successful deletions
+      if (deleteResults.successCount > 0) {
+        // Also delete Firestore data for each user
+        for (let i = 0; i < emailsToProcess.length; i++) {
+          const email = emailsToProcess[i];
+          
+          try {
+            // Delete the user's document from Firestore 'users' collection
+            await deleteDoc(doc(db, "users", email));
+            
+            results.successful.push({
+              email: email
+            });
+            
+            // Update progress
+            onProgress({
+              processed: i + 1,
+              total: emailsToProcess.length,
+              current: email,
+              success: true
+            });
+          } catch (firestoreError) {
+            console.warn(`Could not delete Firestore data for ${email}: ${firestoreError.message}`);
+            // Still mark as successful since the auth user was deleted
+            results.successful.push({
+              email: email,
+              warning: `Auth user deleted but Firestore data may remain: ${firestoreError.message}`
+            });
+          }
+        }
+      }
+      
+      // Process failures
+      if (deleteResults.failureCount > 0) {
+        deleteResults.errors.forEach(error => {
+          const email = emails.find(e => userMap.get(e) === error.uid);
+          results.failed.push({
+            email: email || 'Unknown',
+            error: error.message
+          });
         });
       }
     }
-    
-    // Sign back in as admin
-    await signInWithEmailAndPassword(auth, adminEmail, adminPassword);
-    
   } catch (error) {
     return {
       successful: [],
@@ -197,8 +273,25 @@ export const deleteUsers = async (emails, adminPassword, onProgress = () => {}) 
  */
 export const resetUserPassword = async (email) => {
   try {
-    await sendPasswordResetEmail(auth, email);
-    return { success: true };
+    // Try using Admin API first for more reliable password reset
+    try {
+      const results = await adminApi.resetPasswords([email]);
+      
+      if (results.successful.length > 0) {
+        const resetInfo = results.successful[0];
+        return { 
+          success: true,
+          resetLink: resetInfo.resetLink // We can provide the direct link if needed
+        };
+      } else if (results.failed.length > 0) {
+        throw new Error(results.failed[0].error);
+      }
+    } catch (adminApiError) {
+      console.warn('Admin API password reset failed, falling back to client SDK:', adminApiError);
+      // Fall back to client SDK if admin API fails
+      await sendPasswordResetEmail(auth, email);
+      return { success: true };
+    }
   } catch (error) {
     return { 
       success: false, 
@@ -259,5 +352,6 @@ export const syncUsersToFirestore = async (emails) => {
   return results;
 };
 
-export { auth, db };
+// Export Admin API for direct usage when needed
+export { auth, db, adminApi };
 export default app;

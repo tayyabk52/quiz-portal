@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { createMultipleUsers, deleteUsers, resetUserPassword, syncUsersToFirestore, auth, db } from '../../firebase/config';
+import { createMultipleUsers, deleteUsers, resetUserPassword, syncUsersToFirestore, auth, db, adminApi } from '../../firebase/config';
 import { parseStudentAccountsFromCSV, validateUserData } from '../../utils/csvUtils';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
@@ -303,55 +303,41 @@ const UserManagementSection = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [statusMessage, setStatusMessage] = useState({ type: '', message: '' });
-
-  // Function to fetch users from Firebase
+  // Function to fetch users from Firebase using Admin SDK
   const fetchUsers = async () => {
     if (activeTab === 'manage') {
       setIsLoading(true);
       try {
-        // Try to get users from our custom 'users' collection first
+        // Try to use Admin API to get all users from Firebase Authentication
+        let authUsersList = [];
+        try {
+          // Fetch all users using Admin API
+          authUsersList = await adminApi.getAllUsers();
+          console.log(`Retrieved ${authUsersList.length} users from Firebase Authentication`);
+        } catch (adminApiError) {
+          console.error('Admin API error:', adminApiError);
+          setStatusMessage({
+            type: 'warning',
+            message: 'Could not retrieve all users from Firebase Authentication. Using limited data.'
+          });
+        }
+        
+        // Get user data from Firestore to enrich our auth data
         const usersSnapshot = await getDocs(collection(db, 'users'));
-        const usersList = [];
+        const userMap = new Map();
         
         // Map user documents to our format
         usersSnapshot.forEach(doc => {
           const userData = doc.data();
-          usersList.push({
+          userMap.set(userData.email, {
             email: userData.email,
             rollNumber: userData.rollNumber,
             createdAt: userData.createdAt ? new Date(userData.createdAt.seconds * 1000) : new Date(),
-            uid: userData.uid
+            uid: userData.uid || null
           });
         });
         
-        // If there are no users in the users collection, try to get them from results
-        // (This is for backward compatibility)
-        if (usersList.length === 0) {
-          console.log("No users found in 'users' collection, falling back to 'results'");
-          
-          const resultsSnapshot = await getDocs(collection(db, 'results'));
-          const uniqueUsers = new Map();
-          
-          // Extract unique users from results
-          resultsSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.userEmail && !uniqueUsers.has(data.userEmail)) {
-              uniqueUsers.set(data.userEmail, {
-                email: data.userEmail,
-                lastQuiz: data.submittedAt ? new Date(data.submittedAt.seconds * 1000) : null,
-                score: data.scorePercentage || data.score
-              });
-            }
-          });
-          
-          // Add them to the users list
-          uniqueUsers.forEach(user => {
-            usersList.push(user);
-          });
-        }
-        
-        // Get additional quiz data for users
-        // This enriches the user data with quiz information if available
+        // Get quiz data for users
         const resultsSnapshot = await getDocs(collection(db, 'results'));
         const quizData = new Map();
         
@@ -365,20 +351,61 @@ const UserManagementSection = () => {
           }
         });
         
-        // Merge quiz data with user data
-        const enrichedUsers = usersList.map(user => {
-          const quizInfo = quizData.get(user.email);
-          return {
-            ...user,
-            lastQuiz: quizInfo?.lastQuiz || null,
-            score: quizInfo?.score || null,
-            hasAttemptedQuiz: !!quizInfo
-          };
-        });
+        // Combine Auth users with Firestore data and Quiz results
+        const combinedUsers = [];
         
-        setUsers(enrichedUsers);
-        setFilteredUsers(enrichedUsers);
-        console.log(`Found ${enrichedUsers.length} users`);
+        // Process Auth users from Admin API
+        if (authUsersList.length > 0) {
+          authUsersList.forEach(authUser => {
+            const firestoreData = userMap.get(authUser.email) || {};
+            const quizInfo = quizData.get(authUser.email);
+            
+            combinedUsers.push({
+              uid: authUser.uid,
+              email: authUser.email,
+              displayName: authUser.displayName,
+              createdAt: new Date(authUser.metadata.creationTime),
+              lastSignInTime: authUser.metadata.lastSignInTime ? new Date(authUser.metadata.lastSignInTime) : null,
+              emailVerified: authUser.emailVerified,
+              disabled: authUser.disabled,
+              rollNumber: firestoreData.rollNumber,
+              lastQuiz: quizInfo?.lastQuiz || null,
+              score: quizInfo?.score || null,
+              hasAttemptedQuiz: !!quizInfo,
+              fromAuth: true // Mark this user as coming from Auth
+            });
+          });
+        } 
+        // If no Auth users, use Firestore data as fallback
+        else {
+          userMap.forEach((userData, email) => {
+            const quizInfo = quizData.get(email);
+            combinedUsers.push({
+              ...userData,
+              lastQuiz: quizInfo?.lastQuiz || null,
+              score: quizInfo?.score || null,
+              hasAttemptedQuiz: !!quizInfo,
+              fromAuth: false // Mark this user as NOT coming from Auth
+            });
+          });
+          
+          // Also add any users from quiz results that aren't in the users collection
+          quizData.forEach((quizInfo, email) => {
+            if (!userMap.has(email)) {
+              combinedUsers.push({
+                email,
+                lastQuiz: quizInfo.lastQuiz,
+                score: quizInfo.score,
+                hasAttemptedQuiz: true,
+                fromAuth: false
+              });
+            }
+          });
+        }
+        
+        setUsers(combinedUsers);
+        setFilteredUsers(combinedUsers);
+        console.log(`Found ${combinedUsers.length} users in total`);
       } catch (error) {
         console.error('Error fetching users:', error);
         setStatusMessage({
@@ -537,6 +564,63 @@ const UserManagementSection = () => {
       setStatusMessage({
         type: 'error',
         message: `Error syncing users: ${error.message}`
+      });
+    }
+    
+    setIsLoading(false);
+  };
+  
+  // Toggle user account status (enable/disable)
+  const handleToggleUserStatus = async (user) => {
+    setIsLoading(true);
+    setStatusMessage({ type: '', message: '' });
+    
+    try {
+      // Use the Admin API to toggle user status
+      const action = user.disabled ? 'enable' : 'disable';
+      
+      // Call the Admin API with the appropriate action
+      const response = await fetch(`${process.env.REACT_APP_ADMIN_API_URL || 'http://localhost:5000/api'}/users/${user.uid}/status`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.REACT_APP_ADMIN_API_KEY
+        },
+        body: JSON.stringify({
+          action: action
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        setStatusMessage({
+          type: 'success',
+          message: `User ${user.email} ${action}d successfully`
+        });
+        
+        // Update the user in the local state
+        setUsers(users.map(u => {
+          if (u.email === user.email) {
+            return { ...u, disabled: !u.disabled };
+          }
+          return u;
+        }));
+        
+        // Also update filtered users
+        setFilteredUsers(filteredUsers.map(u => {
+          if (u.email === user.email) {
+            return { ...u, disabled: !u.disabled };
+          }
+          return u;
+        }));
+      } else {
+        throw new Error(result.message || `Failed to ${action} user`);
+      }
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Error: ${error.message}`
       });
     }
     
@@ -847,9 +931,9 @@ const UserManagementSection = () => {
         {filteredUsers.length === 0 ? (
           <p>No users found matching your search.</p>
         ) : (          <UserCardContainer>
-            {filteredUsers.map(user => (
-              <UserCard key={user.email} style={{
-                borderLeft: user.hasAttemptedQuiz ? '4px solid #4CAF50' : '4px solid #FFC107'
+            {filteredUsers.map(user => (              <UserCard key={user.email} style={{
+                borderLeft: user.hasAttemptedQuiz ? '4px solid #4CAF50' : 
+                           (user.disabled ? '4px solid #F44336' : '4px solid #FFC107')
               }}>
                 <UserCardHeader>
                   <Checkbox 
@@ -857,8 +941,40 @@ const UserManagementSection = () => {
                     checked={selectedUsers.includes(user.email)}
                     onChange={() => handleUserSelect(user.email)}
                   />
-                  <UserCardTitle>{user.email}</UserCardTitle>
+                  <UserCardTitle>
+                    {user.email}
+                    {user.fromAuth && (
+                      <span style={{ 
+                        fontSize: '12px', 
+                        backgroundColor: '#E3F2FD', 
+                        padding: '2px 4px',
+                        borderRadius: '3px', 
+                        marginLeft: '5px',
+                        color: '#1976D2'
+                      }}>
+                        Auth
+                      </span>
+                    )}
+                    {user.disabled && (
+                      <span style={{ 
+                        fontSize: '12px', 
+                        backgroundColor: '#FFEBEE', 
+                        padding: '2px 4px',
+                        borderRadius: '3px', 
+                        marginLeft: '5px',
+                        color: '#D32F2F'
+                      }}>
+                        Disabled
+                      </span>
+                    )}
+                  </UserCardTitle>
                 </UserCardHeader>
+                
+                {user.displayName && (
+                  <UserInfo>
+                    <strong>Name:</strong> {user.displayName}
+                  </UserInfo>
+                )}
                 
                 {user.rollNumber && (
                   <UserInfo>
@@ -870,6 +986,22 @@ const UserManagementSection = () => {
                   <UserInfo>
                     <strong>Created:</strong> 
                     {user.createdAt.toLocaleDateString()}
+                  </UserInfo>
+                )}
+                
+                {user.lastSignInTime && (
+                  <UserInfo>
+                    <strong>Last Sign In:</strong> 
+                    {new Date(user.lastSignInTime).toLocaleDateString()}
+                  </UserInfo>
+                )}
+                
+                {user.emailVerified !== undefined && (
+                  <UserInfo>
+                    <strong>Verified:</strong> 
+                    <span style={{ color: user.emailVerified ? 'green' : '#FF9800' }}>
+                      {user.emailVerified ? 'Yes' : 'No'}
+                    </span>
                   </UserInfo>
                 )}
                 
@@ -896,6 +1028,16 @@ const UserManagementSection = () => {
                   <ActionButton onClick={() => handleResetPassword(user)}>
                     Reset Password
                   </ActionButton>
+                  {user.fromAuth && user.disabled !== undefined && (
+                    <ActionButton 
+                      onClick={() => handleToggleUserStatus(user)}
+                      style={{ 
+                        backgroundColor: user.disabled ? '#4CAF50' : '#FF9800'
+                      }}
+                    >
+                      {user.disabled ? 'Enable' : 'Disable'}
+                    </ActionButton>
+                  )}
                 </UserActions>
               </UserCard>
             ))}
