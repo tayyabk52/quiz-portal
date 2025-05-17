@@ -2,13 +2,20 @@
 const express = require('express');
 const path = require('path');
 const dotenv = require('dotenv');
+const cors = require('cors');
 const adminApi = require('./src/server/api');
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
+
+// Enable CORS for the dev setup
+app.use(cors());
+
+// Parse JSON requests
+app.use(express.json());
 
 // Mount the Admin API under /api
 app.use('/api', adminApi);
@@ -24,4 +31,5 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`API available at http://localhost:${PORT}/api`);
 });

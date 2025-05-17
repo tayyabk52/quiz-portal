@@ -10,8 +10,49 @@
   
   # Default build command
   command = "CI= npm run build"
+  
+  # Functions directory
+  functions = "functions"
 
 # Redirects and headers
+[[redirects]]
+  # API functions redirect
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# API endpoints for admin functions
+[[redirects]]
+  from = "/api/users"
+  to = "/.netlify/functions/users"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/users/reset-password"
+  to = "/.netlify/functions/reset-password"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/users/bulk-delete"
+  to = "/.netlify/functions/bulk-delete-users"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/users/update"
+  to = "/.netlify/functions/update-user"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/users/*"
+  to = "/.netlify/functions/delete-user/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   # SPA redirect for client-side routing
   from = "/*"

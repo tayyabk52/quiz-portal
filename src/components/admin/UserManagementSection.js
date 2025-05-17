@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { createMultipleUsers, deleteUsers, resetUserPassword, syncUsersToFirestore, auth, db, adminApi } from '../../firebase/config';
+import { createMultipleUsers, resetUserPassword, syncUsersToFirestore, auth, db } from '../../firebase/config';
 import { parseStudentAccountsFromCSV, validateUserData } from '../../utils/csvUtils';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+
+// API URL from environment variables or default to localhost in development
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
 
 // Styled components for User Management
 const FileUploadArea = styled.div`
@@ -303,116 +306,124 @@ const UserManagementSection = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [statusMessage, setStatusMessage] = useState({ type: '', message: '' });
-  // Function to fetch users from Firebase using Admin SDK
+
+  // Function to fetch users from API
   const fetchUsers = async () => {
     if (activeTab === 'manage') {
       setIsLoading(true);
+      setStatusMessage({ type: '', message: '' });
+      
       try {
-        // Try to use Admin API to get all users from Firebase Authentication
-        let authUsersList = [];
-        try {
-          // Fetch all users using Admin API
-          authUsersList = await adminApi.getAllUsers();
-          console.log(`Retrieved ${authUsersList.length} users from Firebase Authentication`);
-        } catch (adminApiError) {
-          console.error('Admin API error:', adminApiError);
-          setStatusMessage({
-            type: 'warning',
-            message: 'Could not retrieve all users from Firebase Authentication. Using limited data.'
-          });
-        }
+        // Get current user's ID token for authentication
+        const idToken = await auth.currentUser.getIdToken(true);
         
-        // Get user data from Firestore to enrich our auth data
-        const usersSnapshot = await getDocs(collection(db, 'users'));
-        const userMap = new Map();
-        
-        // Map user documents to our format
-        usersSnapshot.forEach(doc => {
-          const userData = doc.data();
-          userMap.set(userData.email, {
-            email: userData.email,
-            rollNumber: userData.rollNumber,
-            createdAt: userData.createdAt ? new Date(userData.createdAt.seconds * 1000) : new Date(),
-            uid: userData.uid || null
-          });
-        });
-        
-        // Get quiz data for users
-        const resultsSnapshot = await getDocs(collection(db, 'results'));
-        const quizData = new Map();
-        
-        resultsSnapshot.forEach(doc => {
-          const data = doc.data();
-          if (data.userEmail) {
-            quizData.set(data.userEmail, {
-              lastQuiz: data.submittedAt ? new Date(data.submittedAt.seconds * 1000) : null,
-              score: data.scorePercentage || data.score
-            });
+        // Fetch users from our API
+        const response = await fetch(`${API_URL}/users`, {
+          headers: {
+            'Authorization': `Bearer ${idToken}`
           }
         });
         
-        // Combine Auth users with Firestore data and Quiz results
-        const combinedUsers = [];
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
         
-        // Process Auth users from Admin API
-        if (authUsersList.length > 0) {
-          authUsersList.forEach(authUser => {
-            const firestoreData = userMap.get(authUser.email) || {};
-            const quizInfo = quizData.get(authUser.email);
-            
-            combinedUsers.push({
-              uid: authUser.uid,
-              email: authUser.email,
-              displayName: authUser.displayName,
-              createdAt: new Date(authUser.metadata.creationTime),
-              lastSignInTime: authUser.metadata.lastSignInTime ? new Date(authUser.metadata.lastSignInTime) : null,
-              emailVerified: authUser.emailVerified,
-              disabled: authUser.disabled,
-              rollNumber: firestoreData.rollNumber,
-              lastQuiz: quizInfo?.lastQuiz || null,
-              score: quizInfo?.score || null,
-              hasAttemptedQuiz: !!quizInfo,
-              fromAuth: true // Mark this user as coming from Auth
-            });
-          });
-        } 
-        // If no Auth users, use Firestore data as fallback
-        else {
-          userMap.forEach((userData, email) => {
-            const quizInfo = quizData.get(email);
-            combinedUsers.push({
-              ...userData,
-              lastQuiz: quizInfo?.lastQuiz || null,
-              score: quizInfo?.score || null,
-              hasAttemptedQuiz: !!quizInfo,
-              fromAuth: false // Mark this user as NOT coming from Auth
+        const data = await response.json();
+        
+        if (!data.users) {
+          throw new Error('Invalid response format from API');
+        }
+        
+        setUsers(data.users);
+        setFilteredUsers(data.users);
+        console.log(`Found ${data.users.length} users from API`);
+      } catch (error) {
+        console.error('Error fetching users from API:', error);
+        
+        // Fallback to the old method if API fails
+        try {
+          // Try to get users from our custom 'users' collection first
+          const usersSnapshot = await getDocs(collection(db, 'users'));
+          const usersList = [];
+          
+          // Map user documents to our format
+          usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            usersList.push({
+              email: userData.email,
+              rollNumber: userData.rollNumber,
+              createdAt: userData.createdAt ? new Date(userData.createdAt.seconds * 1000) : new Date(),
+              uid: userData.uid
             });
           });
           
-          // Also add any users from quiz results that aren't in the users collection
-          quizData.forEach((quizInfo, email) => {
-            if (!userMap.has(email)) {
-              combinedUsers.push({
-                email,
-                lastQuiz: quizInfo.lastQuiz,
-                score: quizInfo.score,
-                hasAttemptedQuiz: true,
-                fromAuth: false
+          // If there are no users in the users collection, try to get them from results
+          if (usersList.length === 0) {
+            console.log("API failed and no users found in 'users' collection, falling back to 'results'");
+            
+            const resultsSnapshot = await getDocs(collection(db, 'results'));
+            const uniqueUsers = new Map();
+            
+            // Extract unique users from results
+            resultsSnapshot.forEach(doc => {
+              const data = doc.data();
+              if (data.userEmail && !uniqueUsers.has(data.userEmail)) {
+                uniqueUsers.set(data.userEmail, {
+                  email: data.userEmail,
+                  lastQuiz: data.submittedAt ? new Date(data.submittedAt.seconds * 1000) : null,
+                  score: data.scorePercentage || data.score
+                });
+              }
+            });
+            
+            // Add them to the users list
+            uniqueUsers.forEach(user => {
+              usersList.push(user);
+            });
+          }
+          
+          // Get additional quiz data for users
+          const resultsSnapshot = await getDocs(collection(db, 'results'));
+          const quizData = new Map();
+          
+          resultsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.userEmail) {
+              quizData.set(data.userEmail, {
+                lastQuiz: data.submittedAt ? new Date(data.submittedAt.seconds * 1000) : null,
+                score: data.scorePercentage || data.score
               });
             }
           });
+          
+          // Merge quiz data with user data
+          const enrichedUsers = usersList.map(user => {
+            const quizInfo = quizData.get(user.email);
+            return {
+              ...user,
+              lastQuiz: quizInfo?.lastQuiz || null,
+              score: quizInfo?.score || null,
+              hasAttemptedQuiz: !!quizInfo
+            };
+          });
+          
+          setUsers(enrichedUsers);
+          setFilteredUsers(enrichedUsers);
+          console.log(`API failed but found ${enrichedUsers.length} users from Firestore`);
+          
+          setStatusMessage({
+            type: 'warning',
+            message: 'Using local data - some admin features may not work. Check server connection.'
+          });
+        } catch (fallbackError) {
+          console.error('Error in fallback user fetching:', fallbackError);
+          setStatusMessage({
+            type: 'error',
+            message: 'Failed to load users: ' + error.message
+          });
         }
-        
-        setUsers(combinedUsers);
-        setFilteredUsers(combinedUsers);
-        console.log(`Found ${combinedUsers.length} users in total`);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-        setStatusMessage({
-          type: 'error',
-          message: 'Failed to load users: ' + error.message
-        });
       }
+      
       setIsLoading(false);
     }
   };
@@ -454,6 +465,7 @@ const UserManagementSection = () => {
     }
   };
   
+  // Reset password using API
   const handleResetPassword = (user) => {
     setUserToReset(user);
     setShowResetModal(true);
@@ -465,30 +477,64 @@ const UserManagementSection = () => {
     setStatusMessage({ type: '', message: '' });
     
     try {
-      const result = await resetUserPassword(userToReset.email);
+      // Get current user's ID token for authentication
+      const idToken = await auth.currentUser.getIdToken(true);
+      
+      // Call the API endpoint
+      const response = await fetch(`${API_URL}/users/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email: userToReset.email })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const result = await response.json();
       
       if (result.success) {
         setStatusMessage({
           type: 'success',
-          message: `Password reset email sent to ${userToReset.email}`
+          message: `Password reset email has been sent to ${userToReset.email}`
         });
       } else {
-        setStatusMessage({
-          type: 'error',
-          message: `Failed to reset password: ${result.error}`
-        });
+        throw new Error(result.error || 'Unknown error');
       }
     } catch (error) {
-      setStatusMessage({
-        type: 'error',
-        message: `Error: ${error.message}`
-      });
+      console.error('Error resetting password:', error);
+      
+      // Fallback to the old method if API fails
+      try {
+        const result = await resetUserPassword(userToReset.email);
+        
+        if (result.success) {
+          setStatusMessage({
+            type: 'success',
+            message: `Password reset email sent to ${userToReset.email}`
+          });
+        } else {
+          setStatusMessage({
+            type: 'error',
+            message: `Failed to reset password: ${result.error}`
+          });
+        }
+      } catch (fallbackError) {
+        setStatusMessage({
+          type: 'error',
+          message: `Error: ${error.message}`
+        });
+      }
     }
     
     setShowResetModal(false);
     setUserToReset(null);
   };
   
+  // Delete users using API
   const handleDeleteSelected = () => {
     if (selectedUsers.length === 0) {
       setStatusMessage({
@@ -500,7 +546,8 @@ const UserManagementSection = () => {
     
     setShowDeleteModal(true);
   };
-    const handleConfirmDelete = async () => {
+  
+  const handleConfirmDelete = async () => {
     if (selectedUsers.length === 0 || !adminPassword) {
       setShowDeleteModal(false);
       return;
@@ -510,30 +557,75 @@ const UserManagementSection = () => {
     setIsLoading(true);
     
     try {
-      const results = await deleteUsers(selectedUsers, adminPassword, (progress) => {
-        // You could update UI based on progress here
+      // Get current user's ID token for authentication
+      const idToken = await auth.currentUser.getIdToken(true);
+      
+      // Get UIDs for selected email addresses
+      const selectedUids = users
+        .filter(user => selectedUsers.includes(user.email))
+        .map(user => user.uid)
+        .filter(uid => uid); // Filter out any undefined UIDs
+      
+      // If we don't have any UIDs (might happen if using fallback user data), 
+      // throw an error to use the fallback method
+      if (selectedUids.length === 0) {
+        throw new Error('No UIDs found for selected users');
+      }
+      
+      // Call the bulk delete API endpoint
+      const response = await fetch(`${API_URL}/users/bulk-delete`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ uids: selectedUids })
       });
       
-      if (results.adminError) {
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const results = await response.json();
+      
+      setStatusMessage({
+        type: 'success',
+        message: `Successfully deleted ${results.successful.length} of ${results.total} users`
+      });
+      
+      // Remove deleted users from the state
+      const deletedEmails = results.successful.map(user => user.email);
+      setUsers(users.filter(user => !deletedEmails.includes(user.email)));
+      setSelectedUsers([]);
+      
+    } catch (error) {
+      console.error('Error deleting users using API:', error);
+      
+      // Fallback to the old method if API fails
+      try {
+        const results = await deleteUsers(selectedUsers, adminPassword);
+        
+        if (results.adminError) {
+          setStatusMessage({
+            type: 'error',
+            message: `Authentication failed: ${results.adminError}`
+          });
+        } else {
+          setStatusMessage({
+            type: 'success',
+            message: `Successfully deleted ${results.successful.length} of ${results.total} users`
+          });
+          
+          // Update users list
+          setUsers(users.filter(user => !selectedUsers.includes(user.email)));
+          setSelectedUsers([]);
+        }
+      } catch (fallbackError) {
         setStatusMessage({
           type: 'error',
-          message: `Authentication failed: ${results.adminError}`
+          message: `Error: ${error.message}`
         });
-      } else {
-        setStatusMessage({
-          type: 'success',
-          message: `Successfully deleted ${results.successful.length} of ${results.total} users`
-        });
-        
-        // Update users list
-        setUsers(users.filter(user => !selectedUsers.includes(user.email)));
-        setSelectedUsers([]);
       }
-    } catch (error) {
-      setStatusMessage({
-        type: 'error',
-        message: `Error: ${error.message}`
-      });
     }
     
     setIsLoading(false);
@@ -564,63 +656,6 @@ const UserManagementSection = () => {
       setStatusMessage({
         type: 'error',
         message: `Error syncing users: ${error.message}`
-      });
-    }
-    
-    setIsLoading(false);
-  };
-  
-  // Toggle user account status (enable/disable)
-  const handleToggleUserStatus = async (user) => {
-    setIsLoading(true);
-    setStatusMessage({ type: '', message: '' });
-    
-    try {
-      // Use the Admin API to toggle user status
-      const action = user.disabled ? 'enable' : 'disable';
-      
-      // Call the Admin API with the appropriate action
-      const response = await fetch(`${process.env.REACT_APP_ADMIN_API_URL || 'http://localhost:5000/api'}/users/${user.uid}/status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.REACT_APP_ADMIN_API_KEY
-        },
-        body: JSON.stringify({
-          action: action
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (response.ok) {
-        setStatusMessage({
-          type: 'success',
-          message: `User ${user.email} ${action}d successfully`
-        });
-        
-        // Update the user in the local state
-        setUsers(users.map(u => {
-          if (u.email === user.email) {
-            return { ...u, disabled: !u.disabled };
-          }
-          return u;
-        }));
-        
-        // Also update filtered users
-        setFilteredUsers(filteredUsers.map(u => {
-          if (u.email === user.email) {
-            return { ...u, disabled: !u.disabled };
-          }
-          return u;
-        }));
-      } else {
-        throw new Error(result.message || `Failed to ${action} user`);
-      }
-    } catch (error) {
-      setStatusMessage({
-        type: 'error',
-        message: `Error: ${error.message}`
       });
     }
     
@@ -931,9 +966,9 @@ const UserManagementSection = () => {
         {filteredUsers.length === 0 ? (
           <p>No users found matching your search.</p>
         ) : (          <UserCardContainer>
-            {filteredUsers.map(user => (              <UserCard key={user.email} style={{
-                borderLeft: user.hasAttemptedQuiz ? '4px solid #4CAF50' : 
-                           (user.disabled ? '4px solid #F44336' : '4px solid #FFC107')
+            {filteredUsers.map(user => (
+              <UserCard key={user.email} style={{
+                borderLeft: user.hasAttemptedQuiz ? '4px solid #4CAF50' : '4px solid #FFC107'
               }}>
                 <UserCardHeader>
                   <Checkbox 
@@ -941,40 +976,8 @@ const UserManagementSection = () => {
                     checked={selectedUsers.includes(user.email)}
                     onChange={() => handleUserSelect(user.email)}
                   />
-                  <UserCardTitle>
-                    {user.email}
-                    {user.fromAuth && (
-                      <span style={{ 
-                        fontSize: '12px', 
-                        backgroundColor: '#E3F2FD', 
-                        padding: '2px 4px',
-                        borderRadius: '3px', 
-                        marginLeft: '5px',
-                        color: '#1976D2'
-                      }}>
-                        Auth
-                      </span>
-                    )}
-                    {user.disabled && (
-                      <span style={{ 
-                        fontSize: '12px', 
-                        backgroundColor: '#FFEBEE', 
-                        padding: '2px 4px',
-                        borderRadius: '3px', 
-                        marginLeft: '5px',
-                        color: '#D32F2F'
-                      }}>
-                        Disabled
-                      </span>
-                    )}
-                  </UserCardTitle>
+                  <UserCardTitle>{user.email}</UserCardTitle>
                 </UserCardHeader>
-                
-                {user.displayName && (
-                  <UserInfo>
-                    <strong>Name:</strong> {user.displayName}
-                  </UserInfo>
-                )}
                 
                 {user.rollNumber && (
                   <UserInfo>
@@ -986,22 +989,6 @@ const UserManagementSection = () => {
                   <UserInfo>
                     <strong>Created:</strong> 
                     {user.createdAt.toLocaleDateString()}
-                  </UserInfo>
-                )}
-                
-                {user.lastSignInTime && (
-                  <UserInfo>
-                    <strong>Last Sign In:</strong> 
-                    {new Date(user.lastSignInTime).toLocaleDateString()}
-                  </UserInfo>
-                )}
-                
-                {user.emailVerified !== undefined && (
-                  <UserInfo>
-                    <strong>Verified:</strong> 
-                    <span style={{ color: user.emailVerified ? 'green' : '#FF9800' }}>
-                      {user.emailVerified ? 'Yes' : 'No'}
-                    </span>
                   </UserInfo>
                 )}
                 
@@ -1028,16 +1015,6 @@ const UserManagementSection = () => {
                   <ActionButton onClick={() => handleResetPassword(user)}>
                     Reset Password
                   </ActionButton>
-                  {user.fromAuth && user.disabled !== undefined && (
-                    <ActionButton 
-                      onClick={() => handleToggleUserStatus(user)}
-                      style={{ 
-                        backgroundColor: user.disabled ? '#4CAF50' : '#FF9800'
-                      }}
-                    >
-                      {user.disabled ? 'Enable' : 'Disable'}
-                    </ActionButton>
-                  )}
                 </UserActions>
               </UserCard>
             ))}
