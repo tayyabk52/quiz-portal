@@ -4,6 +4,7 @@ import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase
 import { db } from '../../firebase/config';
 import { isValidImageUrl } from '../../utils/imageUtils';
 import ImageLoader from '../common/ImageLoader';
+import UserManagementSection from './UserManagementSection';
 
 // This component would only be accessible to administrators in a real application
 // It would require additional authentication and authorization checks
@@ -802,6 +803,12 @@ const Admin = () => {
       </>
     );
   };
+  // User Management Tab
+  const renderUserManagementTab = () => {
+    return (
+      <UserManagementSection />
+    );
+  };
 
   return (
     <AdminContainer>
@@ -820,12 +827,22 @@ const Admin = () => {
         >
           View Results
         </Tab>
+        <Tab
+          active={activeTab === 'users'}
+          onClick={() => setActiveTab('users')}
+        >
+          User Management
+        </Tab>
       </Tabs>
       
       {loading ? (
         <p>Loading...</p>
       ) : (
-        activeTab === 'questions' ? renderQuestionsTab() : renderResultsTab()
+        activeTab === 'questions' 
+          ? renderQuestionsTab() 
+          : activeTab === 'results'
+            ? renderResultsTab()
+            : renderUserManagementTab()
       )}
     </AdminContainer>
   );

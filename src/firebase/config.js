@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Log warning if environment variables are missing
@@ -24,6 +24,60 @@ if (!process.env.REACT_APP_FIREBASE_API_KEY) {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+/**
+ * Creates multiple user accounts in Firebase Auth
+ * 
+ * @param {Array} users - Array of user objects with email and password
+ * @param {Function} onProgress - Callback function for progress updates
+ * @returns {Promise<Object>} Results of the bulk operation
+ */
+export const createMultipleUsers = async (users, onProgress = () => {}) => {
+  const results = {
+    successful: [],
+    failed: [],
+    total: users.length
+  };
+  
+  // Process users sequentially to avoid Firebase quota limits
+  for (let i = 0; i < users.length; i++) {
+    const user = users[i];
+    try {
+      // Create user with email and password
+      await createUserWithEmailAndPassword(auth, user.email, user.password);
+      
+      results.successful.push({
+        email: user.email,
+        rollNumber: user.rollNumber
+      });
+      
+      // Update progress
+      onProgress({
+        processed: i + 1,
+        total: users.length,
+        current: user.email,
+        success: true
+      });
+    } catch (error) {
+      results.failed.push({
+        email: user.email,
+        rollNumber: user.rollNumber,
+        error: error.message
+      });
+      
+      // Update progress
+      onProgress({
+        processed: i + 1,
+        total: users.length,
+        current: user.email,
+        success: false,
+        error: error.message
+      });
+    }
+  }
+  
+  return results;
+};
 
 export { auth, db };
 export default app;
