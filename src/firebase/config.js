@@ -7,10 +7,9 @@ import {
   updatePassword,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  signInWithEmailAndPassword,
   sendPasswordResetEmail
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, setDoc, doc, collection, getDocs, getDoc } from "firebase/firestore";
 
 // Log warning if environment variables are missing
 if (!process.env.REACT_APP_FIREBASE_API_KEY) {
@@ -48,12 +47,23 @@ export const createMultipleUsers = async (users, onProgress = () => {}) => {
     total: users.length
   };
   
+  // Import additional Firestore functions
+  const { setDoc, doc } = require("firebase/firestore");
+  
   // Process users sequentially to avoid Firebase quota limits
   for (let i = 0; i < users.length; i++) {
     const user = users[i];
     try {
       // Create user with email and password
-      await createUserWithEmailAndPassword(auth, user.email, user.password);
+      const userCredential = await createUserWithEmailAndPassword(auth, user.email, user.password);
+      
+      // Also save user info to Firestore 'users' collection for tracking
+      await setDoc(doc(db, "users", user.email), {
+        email: user.email,
+        rollNumber: user.rollNumber,
+        createdAt: new Date(),
+        uid: userCredential.user.uid
+      });
       
       results.successful.push({
         email: user.email,
@@ -111,6 +121,9 @@ export const deleteUsers = async (emails, adminPassword, onProgress = () => {}) 
     const credential = EmailAuthProvider.credential(adminEmail, adminPassword);
     await reauthenticateWithCredential(auth.currentUser, credential);
     
+    // Import additional function for Firestore deletion
+    const { deleteDoc } = require("firebase/firestore");
+    
     // Process users sequentially
     for (let i = 0; i < emails.length; i++) {
       const email = emails[i];
@@ -121,6 +134,15 @@ export const deleteUsers = async (emails, adminPassword, onProgress = () => {}) 
         
         // First sign in as the user (this is a limitation of client-side Firebase)
         await signInWithEmailAndPassword(auth, email, "temporary-password");
+        
+        // Delete the user's document from Firestore 'users' collection
+        try {
+          await deleteDoc(doc(db, "users", email));
+        } catch (firestoreError) {
+          console.warn(`Could not delete Firestore data for ${email}: ${firestoreError.message}`);
+        }
+        
+        // Delete the Auth user
         await deleteUser(auth.currentUser);
         
         results.successful.push({
@@ -182,6 +204,58 @@ export const resetUserPassword = async (email) => {
       error: error.message
     };
   }
+};
+
+/**
+ * Utility function to sync existing users from Auth to Firestore
+ * This is useful for ensuring that any users created before the 'users' collection
+ * was established are properly tracked
+ * 
+ * Note: This has limitations since client SDK can't list all users,
+ * so it should be used as an admin operation
+ * 
+ * @param {Array} emails - Known user emails to sync to Firestore
+ * @returns {Promise<Object>} Results of the sync operation
+ */
+export const syncUsersToFirestore = async (emails) => {
+  const results = {
+    successful: [],
+    failed: [],
+    total: emails.length
+  };
+  
+  for (let i = 0; i < emails.length; i++) {
+    const email = emails[i];
+    try {
+      // Check if user already exists in 'users' collection
+      const userDoc = await doc(db, "users", email);
+      const userSnapshot = await getDoc(userDoc);
+      
+      if (!userSnapshot.exists()) {
+        // Create a document for this user
+        await setDoc(doc(db, "users", email), {
+          email: email,
+          createdAt: new Date(),
+          migratedUser: true
+        });
+        
+        results.successful.push({ email });
+      } else {
+        // User already exists, count as successful but note it
+        results.successful.push({ 
+          email,
+          note: "User already exists in collection" 
+        });
+      }
+    } catch (error) {
+      results.failed.push({
+        email,
+        error: error.message
+      });
+    }
+  }
+  
+  return results;
 };
 
 export { auth, db };

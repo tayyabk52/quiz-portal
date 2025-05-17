@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { createMultipleUsers, deleteUsers, resetUserPassword, auth, db } from '../../firebase/config';
+import { createMultipleUsers, deleteUsers, resetUserPassword, syncUsersToFirestore, auth, db } from '../../firebase/config';
 import { parseStudentAccountsFromCSV, validateUserData } from '../../utils/csvUtils';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
@@ -303,46 +303,95 @@ const UserManagementSection = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [statusMessage, setStatusMessage] = useState({ type: '', message: '' });
-  // Fetch users from Firebase (in a real app, you'd use Firebase Admin SDK via a backend)
-  // For this example, we'll use the authentication state to get users
-  useEffect(() => {
-    const fetchUsers = async () => {
-      if (activeTab === 'manage') {
-        setIsLoading(true);
-        try {
-          // In a real implementation with Firebase Admin SDK, you would fetch all users
-          // For this client-side demo, we'll get users from results collection as a workaround
-          const querySnapshot = await getDocs(collection(db, 'results'));
+
+  // Function to fetch users from Firebase
+  const fetchUsers = async () => {
+    if (activeTab === 'manage') {
+      setIsLoading(true);
+      try {
+        // Try to get users from our custom 'users' collection first
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        const usersList = [];
+        
+        // Map user documents to our format
+        usersSnapshot.forEach(doc => {
+          const userData = doc.data();
+          usersList.push({
+            email: userData.email,
+            rollNumber: userData.rollNumber,
+            createdAt: userData.createdAt ? new Date(userData.createdAt.seconds * 1000) : new Date(),
+            uid: userData.uid
+          });
+        });
+        
+        // If there are no users in the users collection, try to get them from results
+        // (This is for backward compatibility)
+        if (usersList.length === 0) {
+          console.log("No users found in 'users' collection, falling back to 'results'");
+          
+          const resultsSnapshot = await getDocs(collection(db, 'results'));
+          const uniqueUsers = new Map();
           
           // Extract unique users from results
-          const uniqueUsers = new Map();
-          querySnapshot.forEach(doc => {
+          resultsSnapshot.forEach(doc => {
             const data = doc.data();
             if (data.userEmail && !uniqueUsers.has(data.userEmail)) {
               uniqueUsers.set(data.userEmail, {
                 email: data.userEmail,
-                // We don't have the password here, it would be unavailable in a real system too
-                // You could store additional user metadata in Firestore if needed
                 lastQuiz: data.submittedAt ? new Date(data.submittedAt.seconds * 1000) : null,
                 score: data.scorePercentage || data.score
               });
             }
           });
           
-          const usersList = Array.from(uniqueUsers.values());
-          setUsers(usersList);
-          setFilteredUsers(usersList);
-        } catch (error) {
-          console.error('Error fetching users:', error);
-          setStatusMessage({
-            type: 'error',
-            message: 'Failed to load users: ' + error.message
+          // Add them to the users list
+          uniqueUsers.forEach(user => {
+            usersList.push(user);
           });
         }
-        setIsLoading(false);
+        
+        // Get additional quiz data for users
+        // This enriches the user data with quiz information if available
+        const resultsSnapshot = await getDocs(collection(db, 'results'));
+        const quizData = new Map();
+        
+        resultsSnapshot.forEach(doc => {
+          const data = doc.data();
+          if (data.userEmail) {
+            quizData.set(data.userEmail, {
+              lastQuiz: data.submittedAt ? new Date(data.submittedAt.seconds * 1000) : null,
+              score: data.scorePercentage || data.score
+            });
+          }
+        });
+        
+        // Merge quiz data with user data
+        const enrichedUsers = usersList.map(user => {
+          const quizInfo = quizData.get(user.email);
+          return {
+            ...user,
+            lastQuiz: quizInfo?.lastQuiz || null,
+            score: quizInfo?.score || null,
+            hasAttemptedQuiz: !!quizInfo
+          };
+        });
+        
+        setUsers(enrichedUsers);
+        setFilteredUsers(enrichedUsers);
+        console.log(`Found ${enrichedUsers.length} users`);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        setStatusMessage({
+          type: 'error',
+          message: 'Failed to load users: ' + error.message
+        });
       }
-    };
-    
+      setIsLoading(false);
+    }
+  };
+
+  // Load users when tab changes
+  useEffect(() => {
     fetchUsers();
   }, [activeTab]);
   
@@ -424,8 +473,7 @@ const UserManagementSection = () => {
     
     setShowDeleteModal(true);
   };
-  
-  const handleConfirmDelete = async () => {
+    const handleConfirmDelete = async () => {
     if (selectedUsers.length === 0 || !adminPassword) {
       setShowDeleteModal(false);
       return;
@@ -464,6 +512,35 @@ const UserManagementSection = () => {
     setIsLoading(false);
     setShowDeleteModal(false);
     setAdminPassword('');
+  };
+  
+  // Sync all known email addresses to the users collection in Firestore
+  const handleSyncUsers = async () => {
+    setStatusMessage({ type: '', message: '' });
+    setIsLoading(true);
+    
+    try {
+      // Gather all unique email addresses we know about
+      const allEmails = users.map(user => user.email);
+      
+      // Trigger the sync operation
+      const results = await syncUsersToFirestore(allEmails);
+      
+      setStatusMessage({
+        type: 'success',
+        message: `Successfully synced ${results.successful.length} of ${results.total} users to database`
+      });
+      
+      // Refresh the user list
+      fetchUsers();
+    } catch (error) {
+      setStatusMessage({
+        type: 'error',
+        message: `Error syncing users: ${error.message}`
+      });
+    }
+    
+    setIsLoading(false);
   };
   
   const handleFileUploadClick = () => {
@@ -709,16 +786,30 @@ const UserManagementSection = () => {
     }
     
     return (
-      <>
+      <>        <h3>User Management ({filteredUsers.length} users{filteredUsers.length !== users.length ? ` of ${users.length} total` : ''})</h3>
+        
+        <div style={{ display: 'flex', marginBottom: '10px', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ width: '15px', height: '15px', backgroundColor: '#4CAF50', marginRight: '5px' }}></div>
+            <span>Quiz Completed</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <div style={{ width: '15px', height: '15px', backgroundColor: '#FFC107', marginRight: '5px' }}></div>
+            <span>Quiz Not Attempted</span>
+          </div>
+        </div>
+
         <SearchContainer>
           <SearchInput 
             type="text" 
             placeholder="Search users by email..." 
             value={searchQuery}
             onChange={handleSearchChange}
-          />
-          <ActionButton onClick={() => setSearchQuery('')}>
+          />          <ActionButton onClick={() => setSearchQuery('')}>
             Clear
+          </ActionButton>
+          <ActionButton onClick={handleSyncUsers}>
+            Sync Users
           </ActionButton>
         </SearchContainer>
         
@@ -755,10 +846,11 @@ const UserManagementSection = () => {
         
         {filteredUsers.length === 0 ? (
           <p>No users found matching your search.</p>
-        ) : (
-          <UserCardContainer>
+        ) : (          <UserCardContainer>
             {filteredUsers.map(user => (
-              <UserCard key={user.email}>
+              <UserCard key={user.email} style={{
+                borderLeft: user.hasAttemptedQuiz ? '4px solid #4CAF50' : '4px solid #FFC107'
+              }}>
                 <UserCardHeader>
                   <Checkbox 
                     type="checkbox" 
@@ -768,16 +860,35 @@ const UserManagementSection = () => {
                   <UserCardTitle>{user.email}</UserCardTitle>
                 </UserCardHeader>
                 
-                {user.lastQuiz && (
+                {user.rollNumber && (
                   <UserInfo>
-                    <strong>Last Quiz:</strong> 
-                    {user.lastQuiz.toLocaleDateString()} {user.lastQuiz.toLocaleTimeString()}
+                    <strong>Roll Number:</strong> {user.rollNumber}
+                  </UserInfo>
+                )}
+
+                {user.createdAt && (
+                  <UserInfo>
+                    <strong>Created:</strong> 
+                    {user.createdAt.toLocaleDateString()}
                   </UserInfo>
                 )}
                 
-                {user.score !== undefined && (
-                  <UserInfo>
-                    <strong>Score:</strong> {Math.round(user.score)}%
+                {user.lastQuiz ? (
+                  <>
+                    <UserInfo>
+                      <strong>Last Quiz:</strong> 
+                      {user.lastQuiz.toLocaleDateString()} {user.lastQuiz.toLocaleTimeString()}
+                    </UserInfo>
+                    
+                    {user.score !== undefined && (
+                      <UserInfo>
+                        <strong>Score:</strong> {Math.round(user.score)}%
+                      </UserInfo>
+                    )}
+                  </>
+                ) : (
+                  <UserInfo style={{ color: '#FFC107' }}>
+                    <strong>Status:</strong> Quiz not attempted
                   </UserInfo>
                 )}
                 
