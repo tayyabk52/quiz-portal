@@ -118,16 +118,69 @@ const AttemptTitle = styled.h3`
   margin-bottom: 15px;
 `;
 
+const ToggleButton = styled(Button)`
+  margin: 20px auto;
+  display: block;
+`;
+
+const AnswerReviewSection = styled.div`
+  margin-top: 30px;
+  border-top: 1px solid #eee;
+  padding-top: 20px;
+`;
+
+const QuestionCard = styled.div`
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-left: 4px solid ${props => props.correct ? 'var(--success-color)' : 'var(--error-color)'};
+`;
+
+const QuestionHeader = styled.div`
+  font-weight: bold;
+  margin-bottom: 10px;
+`;
+
+const AnswerOption = styled.div`
+  margin: 5px 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background-color: ${props => {
+    if (props.selected && props.correct) return 'rgba(40, 167, 69, 0.2)';
+    if (props.selected && !props.correct) return 'rgba(220, 53, 69, 0.2)';
+    if (props.correct) return 'rgba(40, 167, 69, 0.1)';
+    return 'transparent';
+  }};
+  border: 1px solid ${props => {
+    if (props.selected && props.correct) return 'var(--success-color)';
+    if (props.selected && !props.correct) return 'var(--error-color)';
+    if (props.correct) return 'var(--success-color)';
+    return '#eee';
+  }};
+`;
+
+const QuestionScore = styled.div`
+  text-align: right;
+  font-weight: bold;
+  margin-top: 10px;
+  color: ${props => props.score > 0 ? 'var(--success-color)' : 'var(--error-color)'};
+`;
+
 const Result = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [previousAttempts, setPreviousAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [viewAnswers, setViewAnswers] = useState(false);
 
-  // Get the score from location state (passed from Quiz component)
-  const score = location.state?.score || 0;
+  // Get the data from location state (passed from Quiz component)
+  const scorePercentage = location.state?.scorePercentage || 0;
+  const totalPoints = location.state?.totalPoints || 0;
+  const maxPossiblePoints = location.state?.maxPossiblePoints || 0;
   const correctAnswers = location.state?.correctAnswers || 0;
   const totalQuestions = location.state?.totalQuestions || 0;
+  const answers = location.state?.answers || [];
   
   useEffect(() => {
     const fetchPreviousAttempts = async () => {
@@ -190,7 +243,6 @@ const Result = () => {
       minute: '2-digit'
     });
   };
-
   return (
     <ResultContainer>
       <ResultHeader>
@@ -199,16 +251,20 @@ const Result = () => {
       </ResultHeader>
       
       <ScoreDisplay>
-        <ScoreCircle score={score}>
-          <ScoreText>{Math.round(score)}%</ScoreText>
+        <ScoreCircle score={scorePercentage}>
+          <ScoreText>{Math.round(scorePercentage)}%</ScoreText>
           <ScoreLabel>Score</ScoreLabel>
         </ScoreCircle>
       </ScoreDisplay>
       
       <ResultDetails>
         <DetailRow>
+          <DetailLabel>Points Earned:</DetailLabel>
+          <DetailValue>{totalPoints} out of {maxPossiblePoints} points</DetailValue>
+        </DetailRow>
+        <DetailRow>
           <DetailLabel>Correct Answers:</DetailLabel>
-          <DetailValue>{correctAnswers} out of {totalQuestions}</DetailValue>
+          <DetailValue>{correctAnswers} out of {totalQuestions} questions</DetailValue>
         </DetailRow>
         <DetailRow>
           <DetailLabel>Completion Time:</DetailLabel>
@@ -217,10 +273,52 @@ const Result = () => {
         <DetailRow>
           <DetailLabel>Result:</DetailLabel>
           <DetailValue>
-            {score >= 70 ? 'Passed' : 'Need Improvement'}
+            {scorePercentage >= 70 ? 'Passed' : 'Need Improvement'}
           </DetailValue>
         </DetailRow>
       </ResultDetails>
+      
+      <ToggleButton 
+        onClick={() => setViewAnswers(!viewAnswers)} 
+        secondary={viewAnswers}
+      >
+        {viewAnswers ? 'Hide Answers' : 'Show Answers'}
+      </ToggleButton>
+      
+      {viewAnswers && answers.length > 0 && (
+        <AnswerReviewSection>
+          <AttemptTitle>Review Your Answers</AttemptTitle>
+          {answers.map((answer, index) => (
+            <QuestionCard key={index} correct={answer.correct}>
+              <QuestionHeader>
+                Question {index + 1}: {answer.question}
+              </QuestionHeader>
+              {answer.selectedOption !== -1 ? (
+                <>
+                  <AnswerOption 
+                    selected={true} 
+                    correct={answer.correct}
+                  >
+                    Your answer: {answer.selected}
+                  </AnswerOption>
+                  {!answer.correct && (
+                    <AnswerOption correct={true}>
+                      Correct answer: {answer.correctAnswer}
+                    </AnswerOption>
+                  )}
+                </>
+              ) : (
+                <AnswerOption>
+                  No answer selected
+                </AnswerOption>
+              )}
+              <QuestionScore score={answer.score}>
+                Score: {answer.score} / {answer.maxScore} points
+              </QuestionScore>
+            </QuestionCard>
+          ))}
+        </AnswerReviewSection>
+      )}
       
       {previousAttempts.length > 0 && (
         <PreviousAttemptsSection>
@@ -228,7 +326,10 @@ const Result = () => {
           {previousAttempts.map((attempt, index) => (
             <DetailRow key={index}>
               <DetailLabel>{formatDate(attempt.submittedAt)}</DetailLabel>
-              <DetailValue>Score: {Math.round(attempt.score)}% ({attempt.correctAnswers}/{attempt.totalQuestions})</DetailValue>
+              <DetailValue>
+                Score: {Math.round(attempt.scorePercentage || attempt.score)}% 
+                ({attempt.correctAnswers}/{attempt.totalQuestions})
+              </DetailValue>
             </DetailRow>
           ))}
         </PreviousAttemptsSection>
@@ -237,9 +338,6 @@ const Result = () => {
       <ButtonContainer>
         <Button secondary onClick={handleLogout}>
           Logout
-        </Button>
-        <Button as={Link} to="/instructions">
-          Take Another Quiz
         </Button>
       </ButtonContainer>
     </ResultContainer>

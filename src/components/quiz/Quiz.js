@@ -229,13 +229,20 @@ const Quiz = () => {
   const handleOptionSelect = (optionIndex) => {
     setSelectedOption(optionIndex);
   };
-
   const handleNext = () => {
-    // Save the answer
+    const currentQuestion = quizData[currentQuestionIndex];
+    // Save the answer with more details
     const currentAnswer = {
-      questionId: quizData[currentQuestionIndex].id,
+      questionId: currentQuestion.id,
+      question: currentQuestion.question,
       selectedOption: selectedOption !== null ? selectedOption : -1, // -1 means no selection
-      isCorrect: selectedOption === quizData[currentQuestionIndex].correctAnswer
+      selected: selectedOption !== null ? currentQuestion.options[selectedOption] : 'No selection',
+      correctAnswer: currentQuestion.options[currentQuestion.correctAnswer],
+      correct: selectedOption === currentQuestion.correctAnswer,
+      // Include the score for this question
+      score: selectedOption === currentQuestion.correctAnswer ? 
+        (currentQuestion.score || 1) : 0,
+      maxScore: currentQuestion.score || 1
     };
     
     setAnswers([...answers, currentAnswer]);
@@ -249,7 +256,6 @@ const Quiz = () => {
       submitQuiz([...answers, currentAnswer]);
     }
   };
-
   const submitQuiz = async (finalAnswers) => {
     setIsSubmitting(true);
     
@@ -261,27 +267,43 @@ const Quiz = () => {
       }
       
       // Calculate score
-      const correctAnswers = finalAnswers.filter(answer => answer.isCorrect).length;
+      const correctAnswers = finalAnswers.filter(answer => answer.correct).length;
       const totalQuestions = quizData.length;
-      const score = (correctAnswers / totalQuestions) * 100;
+      
+      // Calculate earned points and total possible points
+      const totalPoints = finalAnswers.reduce((sum, answer) => sum + answer.score, 0);
+      const maxPossiblePoints = finalAnswers.reduce((sum, answer) => sum + answer.maxScore, 0);
+      
+      // Calculate percentage score
+      const scorePercentage = (totalPoints / maxPossiblePoints) * 100;
+      
+      // Record the time quiz was completed
+      const completionTime = new Date();
       
       // Save results to Firebase
       await addDoc(collection(db, 'results'), {
         userId: currentUser.uid,
         userEmail: currentUser.email,
-        score: score,
+        scorePercentage: scorePercentage,
+        totalPoints: totalPoints,
+        maxPossiblePoints: maxPossiblePoints,
         correctAnswers: correctAnswers,
         totalQuestions: totalQuestions,
         answers: finalAnswers,
+        timeTaken: finalAnswers.length * 30, // Approximate time taken (30 seconds per question)
         submittedAt: serverTimestamp()
       });
       
       // Navigate to results page
       navigate('/result', { 
         state: { 
-          score: score,
+          scorePercentage: scorePercentage,
+          totalPoints: totalPoints,
+          maxPossiblePoints: maxPossiblePoints,
           correctAnswers: correctAnswers,
-          totalQuestions: totalQuestions
+          totalQuestions: totalQuestions,
+          answers: finalAnswers,
+          completionTime: completionTime
         } 
       });
     } catch (error) {

@@ -258,8 +258,7 @@ const Admin = () => {
     const secs = Math.round(seconds % 60);
     return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
   };
-  
-  // Export results to CSV file
+    // Export results to CSV file
   const exportResultsToCSV = () => {
     if (results.length === 0) {
       alert('No results to export');
@@ -267,16 +266,21 @@ const Admin = () => {
     }
     
     // Create CSV headers
-    let csvContent = "User Email,Score,Date,Correct Answers,Total Questions,Time Taken\n";
+    let csvContent = "User Email,Points,Max Possible Points,Percentage,Date,Correct Answers,Total Questions,Time Taken\n";
     
     // Add row for each result
     results.forEach(result => {
       const dateStr = result.submittedAt ? 
         new Date(result.submittedAt.seconds * 1000).toLocaleString() : 'N/A';
       const timeTaken = result.timeTaken ? formatTime(result.timeTaken) : 'N/A';
+      const score = result.totalPoints ? Math.round(result.scorePercentage) : Math.round(result.score);
+      const points = result.totalPoints || 'N/A';
+      const maxPoints = result.maxPossiblePoints || 'N/A';
       
       csvContent += '"' + result.userEmail + '",' + 
-                   Math.round(result.score) + '%,"' + 
+                   points + ',' +
+                   maxPoints + ',' +
+                   score + '%,"' + 
                    dateStr + '",' + 
                    result.correctAnswers + ',' + 
                    result.totalQuestions + ',"' + 
@@ -675,7 +679,11 @@ const Admin = () => {
             {results.map((result) => (
               <TableRow key={result.id}>
                 <TableCell>{result.userEmail}</TableCell>
-                <TableCell>{Math.round(result.score)}%</TableCell>
+                <TableCell>
+                {result.totalPoints ? 
+                  `${result.totalPoints}/${result.maxPossiblePoints} (${Math.round(result.scorePercentage)}%)` : 
+                  `${Math.round(result.score)}%`}
+              </TableCell>
                 <TableCell>
                   {result.submittedAt ? new Date(result.submittedAt.seconds * 1000).toLocaleString() : 'N/A'}
                 </TableCell>
@@ -696,8 +704,7 @@ const Admin = () => {
             <ResultDetailContent>
               <h3>Result Details</h3>
               <CloseButton onClick={handleCloseResultDetails}>×</CloseButton>
-              
-              <DetailTable>
+                <DetailTable>
                 <tbody>
                   <tr>
                     <DetailTableHeader>User:</DetailTableHeader>
@@ -708,8 +715,12 @@ const Admin = () => {
                     <td>{selectedResult.submittedAt ? new Date(selectedResult.submittedAt.seconds * 1000).toLocaleString() : 'N/A'}</td>
                   </tr>
                   <tr>
-                    <DetailTableHeader>Score:</DetailTableHeader>
-                    <td>{Math.round(selectedResult.score)}%</td>
+                    <DetailTableHeader>Score Percentage:</DetailTableHeader>
+                    <td>{Math.round(selectedResult.scorePercentage || selectedResult.score)}%</td>
+                  </tr>
+                  <tr>
+                    <DetailTableHeader>Points:</DetailTableHeader>
+                    <td>{selectedResult.totalPoints || 'N/A'} / {selectedResult.maxPossiblePoints || 'N/A'}</td>
                   </tr>
                   <tr>
                     <DetailTableHeader>Correct Answers:</DetailTableHeader>
