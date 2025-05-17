@@ -5,55 +5,16 @@ import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore
 import { auth, db } from '../../firebase/config';
 import quizSecurity from './QuizSecurity';
 import { convertDriveUrl } from '../../utils/imageUtils';
+import ProgressiveImage from '../common/ProgressiveImage';
 
-// Component to handle question images with error handling
+// Use the common ProgressiveImage component for question images
 const QuestionImageComponent = ({ imageUrl }) => {
-  const [imageError, setImageError] = useState(false);
-  const [alternativeAttempted, setAlternativeAttempted] = useState(false);
-  
-  // First attempt with converted URL
-  const convertedUrl = convertDriveUrl(imageUrl);
-  
-  // For debugging purposes
-  useEffect(() => {
-    console.log('Original image URL:', imageUrl);
-    console.log('Converted image URL:', convertedUrl);
-  }, [imageUrl, convertedUrl]);
-  
-  // Try alternative format if the first one fails
-  const handleImageError = () => {
-    if (!alternativeAttempted) {
-      // Try an alternative format before giving up
-      setAlternativeAttempted(true);
-      
-      // Don't set error yet, it will try the second format
-      console.log('First image format failed, trying alternative...');
-    } else {
-      // Both attempts failed
-      setImageError(true);
-      console.log('All image loading attempts failed');
-    }
-  };
-  
-  // If first attempt failed, try direct format
-  const imageSrc = alternativeAttempted ? 
-    imageUrl.replace(/\/file\/d\/(.+?)\/view.+/, '/uc?export=view&id=$1') : 
-    convertedUrl;
-  
   return (
     <ImageContainer>
-      {imageError ? (
-        <ImageErrorMessage>
-          Image could not be loaded. Please continue with the question.
-        </ImageErrorMessage>
-      ) : (
-        <QuestionImage 
-          src={imageSrc} 
-          alt="Question illustration" 
-          onError={handleImageError}
-          crossOrigin="anonymous"
-        />
-      )}
+      <ProgressiveImage 
+        imageUrl={imageUrl} 
+        alt="Question illustration" 
+      />
     </ImageContainer>
   );
 };
@@ -99,22 +60,10 @@ const Question = styled.h2`
 const ImageContainer = styled.div`
   text-align: center;
   margin-bottom: 30px;
-`;
-
-const QuestionImage = styled.img`
-  max-width: 100%;
-  max-height: 300px;
-  border-radius: 8px;
-  object-fit: contain;
-`;
-
-const ImageErrorMessage = styled.div`
-  color: var(--light-text);
-  padding: 20px;
-  text-align: center;
-  border: 1px dashed #ddd;
-  border-radius: 8px;
-  margin-bottom: 20px;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 `;
 
 const OptionsContainer = styled.div`

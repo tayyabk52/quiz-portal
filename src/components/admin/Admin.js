@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { convertDriveUrl, isValidImageUrl } from '../../utils/imageUtils';
+import ProgressiveImage from '../common/ProgressiveImage';
 
 // This component would only be accessible to administrators in a real application
 // It would require additional authentication and authorization checks
@@ -159,6 +160,29 @@ const ImagePreview = styled.div`
     border-radius: 4px;
     padding: 5px;
   }
+`;
+
+const QuestionImageThumbnail = styled.div`
+  width: 80px;
+  height: 80px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+`;
+
+const NoImageText = styled.span`
+  color: #aaa;
+  font-style: italic;
+  font-size: 0.9em;
 `;
 
 // Styled components for result details modal
@@ -601,10 +625,9 @@ const Admin = () => {
                 <li>Make sure it's set to "Anyone with the link can view"</li>
                 <li>Copy and paste the shared link here</li>
               </ul>
-            </div>
-            {previewUrl && (
+            </div>            {formData.imageUrl && (
               <ImagePreview>
-                <img src={previewUrl} alt="Preview" />
+                <ProgressiveImage imageUrl={formData.imageUrl} alt="Preview" />
               </ImagePreview>
             )}
           </FormGroup>
@@ -632,8 +655,9 @@ const Admin = () => {
         </Form>
         
         <Table>
-          <thead>
-            <tr>            <TableHeader>Question</TableHeader>
+          <thead>            <tr>
+              <TableHeader>Question</TableHeader>
+              <TableHeader>Image</TableHeader>
               <TableHeader>Time Limit</TableHeader>
               <TableHeader>Correct Option</TableHeader>
               <TableHeader>Score</TableHeader>
@@ -642,10 +666,21 @@ const Admin = () => {
           </thead>
           <tbody>
             {questions.map((q) => (
-              <TableRow key={q.id}>                <TableCell>{q.question}</TableCell>
+              <TableRow key={q.id}>
+                <TableCell>{q.question}</TableCell>
+                <TableCell>
+                  {q.imageUrl ? (
+                    <QuestionImageThumbnail>
+                      <ProgressiveImage imageUrl={q.imageUrl} alt="Question preview" />
+                    </QuestionImageThumbnail>
+                  ) : (
+                    <NoImageText>No image</NoImageText>
+                  )}
+                </TableCell>
                 <TableCell>{q.timeLimit} seconds</TableCell>
                 <TableCell>Option {q.correctAnswer + 1}</TableCell>
-                <TableCell>{q.score || 1} points</TableCell><TableCell>
+                <TableCell>{q.score || 1} points</TableCell>
+                <TableCell>
                   <ActionButton edit onClick={() => handleEditQuestion(q)}>Edit</ActionButton>
                   <ActionButton delete onClick={() => handleDeleteQuestion(q.id)}>Delete</ActionButton>
                 </TableCell>
