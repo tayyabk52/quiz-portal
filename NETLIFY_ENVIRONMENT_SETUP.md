@@ -18,13 +18,24 @@ NODE_VERSION=16
 
 **Important Note about FIREBASE_PRIVATE_KEY**
 
-For the `FIREBASE_PRIVATE_KEY` variable:
-- Copy the entire private key value **exactly** as it appears in your service account JSON file
-- Include the quotation marks at the beginning and end
-- Make sure to include all line breaks (replace `\n` with actual line breaks)
-- Example format: `"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANB...\n-----END PRIVATE KEY-----\n"`
+The `FIREBASE_PRIVATE_KEY` variable is often the trickiest part of setting up Firebase Admin SDK on Netlify. Here are three different methods to set it properly:
 
-If you're copying from the JSON file directly, you may need to manually replace escaped newlines (`\\n`) with actual newlines and ensure quotation marks are preserved.
+**Option 1: Direct Copy from JSON File**
+Copy the entire raw value from your service account JSON file, including quotes:
+```
+"-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANB...\n-----END PRIVATE KEY-----\n"
+```
+
+**Option 2: Replace Escaped Newlines with Actual Newlines**
+Paste the private key into a text editor first. Replace all `\n` sequences with actual line breaks, then paste into the Netlify environment variable field.
+
+**Option 3: Use the Netlify CLI** 
+The Netlify CLI handles escaping properly:
+```
+netlify env:set FIREBASE_PRIVATE_KEY "$(cat path/to/service-account.json | jq -r '.private_key')"
+```
+
+> We've updated our code to handle various formats of the private key, so any of these methods should work.
 
 ## Other Environment Variables
 

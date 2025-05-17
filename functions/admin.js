@@ -2,21 +2,56 @@
 const admin = require('firebase-admin');
 const path = require('path');
 
+// Helper function to process the private key from environment variable
+const processPrivateKey = (key) => {
+  if (!key) return null;
+  
+  // If the key doesn't start with "-----BEGIN PRIVATE KEY", it's probably still JSON encoded
+  if (!key.trim().startsWith('"-----BEGIN')) {
+    try {
+      // Try to parse it assuming it's a JSON string
+      return JSON.parse(key);
+    } catch (e) {
+      console.log('Private key is not in JSON format, using as-is');
+    }
+  }
+  
+  // Replace literal \n with newlines if needed
+  if (key.includes('\\n')) {
+    return key.replace(/\\n/g, '\n');
+  }
+  
+  return key;
+};
+
 // Initialize Firebase Admin with service account if not already initialized
 if (!admin.apps.length) {
   try {
-    // In Netlify, everything is flattened, so we don't need complex paths
-    // We'll rely exclusively on environment variables in production
+    // Log environment variables (without sensitive data)
+    console.log('Firebase Project ID:', process.env.FIREBASE_PROJECT_ID || 'Not set');
+    console.log('Firebase Client Email:', process.env.FIREBASE_CLIENT_EMAIL ? 'Is set' : 'Not set');
+    console.log('Firebase Private Key:', process.env.FIREBASE_PRIVATE_KEY ? 'Is set' : 'Not set');
+    
+    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+      throw new Error('Missing Firebase Admin SDK credentials in environment variables');
+    }
+    
+    // Process the private key to handle different formats
+    const privateKey = processPrivateKey(process.env.FIREBASE_PRIVATE_KEY);
+    console.log('Private key processed');
+    
+    // Initialize with the processed credentials
     admin.initializeApp({
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+        privateKey: privateKey
       })
     });
-    console.log('Firebase Admin SDK initialized with environment variables');
+    console.log('Firebase Admin SDK initialized successfully');
   } catch (error) {
     console.error('Failed to initialize Firebase Admin SDK:', error);
+    console.error(error.stack);
   }
 }
 

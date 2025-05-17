@@ -1,2 +1,11 @@
-# Redirects all routes to index.html for client-side routing
+# API routes for the admin section
+/api/debug              /.netlify/functions/debug              200
+/api/test               /.netlify/functions/test               200
+/api/users              /.netlify/functions/users              200
+/api/users/reset-password  /.netlify/functions/reset-password  200
+/api/users/bulk-delete  /.netlify/functions/bulk-delete-users  200
+/api/users/update       /.netlify/functions/update-user        200
+/api/users/*            /.netlify/functions/delete-user/:splat 200
+
+# Redirects all other routes to index.html for client-side routing
 /*    /index.html   200

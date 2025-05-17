@@ -313,22 +313,56 @@ const UserManagementSection = () => {
       setIsLoading(true);
       setStatusMessage({ type: '', message: '' });
       
+      // First, try the test endpoint to check if API is working
+      try {
+        console.log('Testing API connection...');
+        const testResponse = await fetch(`${API_URL}/test`);
+        
+        if (testResponse.ok) {
+          const testData = await testResponse.json();
+          console.log('API test successful:', testData);
+        } else {
+          console.warn('API test failed:', testResponse.status, testResponse.statusText);
+        }
+      } catch (testError) {
+        console.error('API test error:', testError);
+      }
+      
       try {
         // Get current user's ID token for authentication
         const idToken = await auth.currentUser.getIdToken(true);
+        console.log('Got ID token, fetching users from API');
+        
+        const apiUrl = `${API_URL}/users`;
+        console.log('API URL:', apiUrl);
         
         // Fetch users from our API
-        const response = await fetch(`${API_URL}/users`, {
+        const response = await fetch(apiUrl, {
           headers: {
-            'Authorization': `Bearer ${idToken}`
+            'Authorization': `Bearer ${idToken}`,
+            'Accept': 'application/json'
           }
         });
         
+        console.log('API response status:', response.status, response.statusText);
+        
         if (!response.ok) {
+          // Try to get response text for debugging
+          const errorText = await response.text();
+          console.error('API error response text:', errorText);
           throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
         
+        // Check if response is actually JSON before parsing
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await response.text();
+          console.error('Response is not JSON:', contentType, text.substring(0, 200));
+          throw new Error(`Invalid content type: ${contentType}`);
+        }
+        
         const data = await response.json();
+        console.log('API response data:', data);
         
         if (!data.users) {
           throw new Error('Invalid response format from API');
@@ -930,6 +964,7 @@ const UserManagementSection = () => {
           <ActionButton onClick={handleSyncUsers}>
             Sync Users
           </ActionButton>
+          {renderDiagnosticsButton()}
         </SearchContainer>
         
         {statusMessage.message && (
@@ -1093,6 +1128,76 @@ const UserManagementSection = () => {
       </>
     );
   };
+  
+  // Diagnostic function to check connection to API endpoints
+  const runDiagnostics = async () => {
+    const endpoints = ['/api/debug', '/api/test', '/api/users'];
+    const results = {};
+    
+    setStatusMessage({ 
+      type: 'info', 
+      message: 'Running API diagnostics...' 
+    });
+    
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Testing endpoint: ${endpoint}`);
+        const response = await fetch(endpoint);
+        let responseData = '';
+        
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            responseData = await response.json();
+          } else {
+            responseData = await response.text();
+          }
+        } catch (parseError) {
+          responseData = `Error parsing response: ${parseError.message}`;
+        }
+        
+        results[endpoint] = {
+          status: response.status,
+          ok: response.ok,
+          contentType: response.headers.get('content-type'),
+          response: responseData
+        };
+        
+        console.log(`Endpoint ${endpoint}:`, results[endpoint]);
+      } catch (error) {
+        results[endpoint] = { error: error.message };
+        console.error(`Error testing ${endpoint}:`, error);
+      }
+    }
+    
+    console.log('API Diagnostics completed:', results);
+    
+    // Check if the debug endpoint worked
+    if (results['/api/debug']?.ok) {
+      setStatusMessage({
+        type: 'success',
+        message: `API connection working. Environment found: ${results['/api/debug'].response.netlifyEnvironment || 'unknown'}`
+      });
+    } else {
+      setStatusMessage({
+        type: 'warning',
+        message: 'API diagnostic failed. Check console for details.'
+      });
+    }
+    
+    return results;
+  };
+  
+  // Add a diagnostic button to the render function
+  const renderDiagnosticsButton = () => (
+    <ActionButton 
+      style={{ backgroundColor: '#9c27b0' }}
+      onClick={runDiagnostics}
+    >
+      Run API Diagnostics
+    </ActionButton>
+  );
+  
   return (
     <div>
       <TabContainer>

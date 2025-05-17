@@ -66,6 +66,14 @@
     X-Content-Type-Options = "nosniff"    # Content Security Policy
     Content-Security-Policy = "default-src 'self'; script-src 'self' https://www.gstatic.com/ https://apis.google.com/ https://*.firebaseio.com https://www.googletagmanager.com 'unsafe-inline'; connect-src 'self' wss://*.firebaseio.com https://*.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https://*.googleapis.com https://*.gstatic.com https://lh3.googleusercontent.com https://drive.google.com; font-src 'self' https://fonts.gstatic.com;"
 
+# Add CORS headers for API routes
+[[headers]]
+  for = "/api/*"
+    [headers.values]
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Methods = "GET, POST, PUT, DELETE, OPTIONS"
+    Access-Control-Allow-Headers = "Content-Type, Authorization"
+
 # Environment variable configuration
 [build.environment]
   # Set Node.js version
