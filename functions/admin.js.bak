@@ -80,18 +80,17 @@ const verifyAdminToken = async (req) => {
 
 // Admin SDK functions
 const adminFunctions = {
-  // List all users
-  listUsers: async () => {
+  // List all users  listUsers: async () => {
     try {
-      // Import our utility function
-      const { safeFormatDate } = require('./utils');
-      
       const userRecords = await admin.auth().listUsers();
       
       // Get user data from Firestore
       const firestore = admin.firestore();
       const usersCollection = firestore.collection('users');
       const resultsCollection = firestore.collection('results');
+      
+      // Import our utility function
+      const { safeFormatDate } = require('./utils');
       
       // Fetch additional user data
       const usersSnapshot = await usersCollection.get();

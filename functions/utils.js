@@ -1,3 +1,36 @@
+// Helper function to safely convert Firebase/Firestore dates to ISO strings
+const safeFormatDate = (dateVal) => {
+  if (!dateVal) return null;
+  
+  try {
+    // Handle Firestore Timestamp objects
+    if (dateVal.toDate && typeof dateVal.toDate === 'function') {
+      return dateVal.toDate().toISOString();
+    }
+    
+    // Handle serialized Firestore timestamps with _seconds
+    if (dateVal._seconds) {
+      return new Date(dateVal._seconds * 1000).toISOString();
+    }
+    
+    // Handle Date objects
+    if (dateVal instanceof Date) {
+      return dateVal.toISOString();
+    }
+    
+    // Handle string dates
+    if (typeof dateVal === 'string') {
+      const date = new Date(dateVal);
+      return isNaN(date.getTime()) ? null : date.toISOString();
+    }
+    
+    return null;
+  } catch (e) {
+    console.warn('Failed to format date:', dateVal);
+    return null;
+  }
+};
+
 // Common wrapper for Netlify function responses
 const createResponse = (statusCode, body) => {
   console.log(`Creating response with status: ${statusCode}`);
@@ -111,5 +144,6 @@ const withAdminAuth = (handler) => {
 module.exports = {
   createResponse,
   withErrorHandling,
-  withAdminAuth
+  withAdminAuth,
+  safeFormatDate
 };

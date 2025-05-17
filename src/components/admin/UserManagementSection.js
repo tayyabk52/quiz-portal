@@ -360,17 +360,38 @@ const UserManagementSection = () => {
           console.error('Response is not JSON:', contentType, text.substring(0, 200));
           throw new Error(`Invalid content type: ${contentType}`);
         }
-        
-        const data = await response.json();
+          const data = await response.json();
         console.log('API response data:', data);
         
         if (!data.users) {
           throw new Error('Invalid response format from API');
         }
+          // Process the dates in the user data
+        const processedUsers = data.users.map(user => {
+          // Convert string dates to Date objects with error handling
+          const safeDate = (dateValue) => {
+            if (!dateValue) return null;
+            try {
+              const date = new Date(dateValue);
+              // Check if date is valid
+              return isNaN(date.getTime()) ? null : date;
+            } catch (e) {
+              console.warn(`Invalid date value: ${dateValue}`);
+              return null;
+            }
+          };
+          
+          return {
+            ...user,
+            createdAt: safeDate(user.createdAt),
+            lastSignIn: safeDate(user.lastSignIn),
+            lastQuiz: safeDate(user.lastQuiz)
+          };
+        });
         
-        setUsers(data.users);
-        setFilteredUsers(data.users);
-        console.log(`Found ${data.users.length} users from API`);
+        setUsers(processedUsers);
+        setFilteredUsers(processedUsers);
+        console.log(`Found ${processedUsers.length} users from API`);
       } catch (error) {
         console.error('Error fetching users from API:', error);
         
@@ -1018,20 +1039,45 @@ const UserManagementSection = () => {
                   <UserInfo>
                     <strong>Roll Number:</strong> {user.rollNumber}
                   </UserInfo>
-                )}
-
-                {user.createdAt && (
+                )}                {user.createdAt && (
                   <UserInfo>
                     <strong>Created:</strong> 
-                    {user.createdAt.toLocaleDateString()}
+                    {(() => {
+                      try {
+                        if (user.createdAt instanceof Date) {
+                          return user.createdAt.toLocaleDateString();
+                        } else if (typeof user.createdAt === 'string') {
+                          const date = new Date(user.createdAt);
+                          return isNaN(date.getTime()) ? 'Invalid date' : date.toLocaleDateString();
+                        }
+                        return 'Unknown date';
+                      } catch (e) {
+                        console.warn('Error formatting createdAt date:', e);
+                        return 'Date error';
+                      }
+                    })()}
                   </UserInfo>
                 )}
-                
-                {user.lastQuiz ? (
+                  {user.lastQuiz ? (
                   <>
                     <UserInfo>
                       <strong>Last Quiz:</strong> 
-                      {user.lastQuiz.toLocaleDateString()} {user.lastQuiz.toLocaleTimeString()}
+                      {(() => {
+                        try {
+                          if (user.lastQuiz instanceof Date) {
+                            return `${user.lastQuiz.toLocaleDateString()} ${user.lastQuiz.toLocaleTimeString()}`;
+                          } else if (typeof user.lastQuiz === 'string') {
+                            const date = new Date(user.lastQuiz);
+                            return isNaN(date.getTime()) ? 
+                              'Invalid date' : 
+                              `${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+                          }
+                          return 'Unknown date';
+                        } catch (e) {
+                          console.warn('Error formatting lastQuiz date:', e);
+                          return 'Date error';
+                        }
+                      })()}
                     </UserInfo>
                     
                     {user.score !== undefined && (
