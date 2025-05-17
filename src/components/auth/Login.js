@@ -76,13 +76,19 @@ const ErrorMessage = styled.p`
   margin-top: 15px;
 `;
 
+const HelpText = styled.small`
+  display: block;
+  color: #666;
+  margin-top: 5px;
+  font-size: 12px;
+`;
+
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-  const handleSubmit = async (e) => {
+  const navigate = useNavigate();  const handleSubmit = async (e) => {
     e.preventDefault();
     
     if (!username || !password) {
@@ -90,19 +96,25 @@ const Login = () => {
       return;
     }
     
-    // Validate username format (no spaces or special characters except - and _)
-    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
-    if (!usernameRegex.test(username)) {
-      setError('Username can only contain letters, numbers, underscores and hyphens');
-      return;
-    }
-    
     setLoading(true);
     setError('');
     
     try {
-      // Convert username to email format for Firebase Auth
-      const email = `${username.trim()}@quizportal.com`;
+      // Check if the input is already a valid email
+      let email = username.trim();
+      
+      // If it doesn't contain @, assume it's a username and add domain
+      if (!email.includes('@')) {
+        // Validate username format (no spaces or special characters except - and _)
+        const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+        if (!usernameRegex.test(email)) {
+          setError('Username can only contain letters, numbers, underscores and hyphens');
+          setLoading(false);
+          return;
+        }
+        
+        email = `${email}@quizportal.com`;
+      }
       
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/instructions');
@@ -121,21 +133,21 @@ const Login = () => {
       setLoading(false);
     }
   };
-
   return (
     <LoginContainer>
       <Form onSubmit={handleSubmit}>
         <FormTitle>Student Login</FormTitle>
         
         <FormGroup>
-          <Label htmlFor="username">Username</Label>
-          <Input
+          <Label htmlFor="username">Username or Email</Label>          <Input
             type="text"
             id="username"
+            placeholder="Enter username or full email"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             disabled={loading}
           />
+          <HelpText>You can enter either your username or your complete email address</HelpText>
         </FormGroup>
         
         <FormGroup>
