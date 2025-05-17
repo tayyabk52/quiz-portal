@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { convertDriveUrl, isValidImageUrl } from '../../utils/imageUtils';
-import ProgressiveImage from '../common/ProgressiveImage';
+import { isValidImageUrl } from '../../utils/imageUtils';
+import ImageLoader from '../common/ImageLoader';
 
 // This component would only be accessible to administrators in a real application
 // It would require additional authentication and authorization checks
@@ -379,14 +379,13 @@ const Admin = () => {
       imageUrl: url
     });
     
-    // If it's a valid URL, convert it to a direct image URL and set as preview
+    // If it's a valid URL, set as preview
     if (url && isValidImageUrl(url)) {
-      const directUrl = convertDriveUrl(url);
-      setPreviewUrl(directUrl);
+      setPreviewUrl(url);
     } else {
       setPreviewUrl('');
     }
-  };  const handleSubmit = async (e) => {
+  };const handleSubmit = async (e) => {
     e.preventDefault();
     
     try {
@@ -475,10 +474,9 @@ const Admin = () => {
       imageUrl: question.imageUrl,
       score: question.score || 1
     });
-    
-    // Set preview URL if there's an image
+      // Set preview URL if there's an image
     if (question.imageUrl) {
-      setPreviewUrl(convertDriveUrl(question.imageUrl));
+      setPreviewUrl(question.imageUrl);
     } else {
       setPreviewUrl('');
     }
@@ -627,7 +625,7 @@ const Admin = () => {
               </ul>
             </div>            {formData.imageUrl && (
               <ImagePreview>
-                <ProgressiveImage imageUrl={formData.imageUrl} alt="Preview" />
+                <ImageLoader src={formData.imageUrl} alt="Preview" />
               </ImagePreview>
             )}
           </FormGroup>
@@ -667,11 +665,10 @@ const Admin = () => {
           <tbody>
             {questions.map((q) => (
               <TableRow key={q.id}>
-                <TableCell>{q.question}</TableCell>
-                <TableCell>
+                <TableCell>{q.question}</TableCell>                <TableCell>
                   {q.imageUrl ? (
                     <QuestionImageThumbnail>
-                      <ProgressiveImage imageUrl={q.imageUrl} alt="Question preview" />
+                      <ImageLoader src={q.imageUrl} alt="Question preview" />
                     </QuestionImageThumbnail>
                   ) : (
                     <NoImageText>No image</NoImageText>

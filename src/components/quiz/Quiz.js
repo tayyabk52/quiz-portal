@@ -4,15 +4,14 @@ import styled from 'styled-components';
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import quizSecurity from './QuizSecurity';
-import { convertDriveUrl } from '../../utils/imageUtils';
-import ProgressiveImage from '../common/ProgressiveImage';
+import ImageLoader from '../common/ImageLoader';
 
-// Use the common ProgressiveImage component for question images
+// Use the common ImageLoader component for question images
 const QuestionImageComponent = ({ imageUrl }) => {
   return (
     <ImageContainer>
-      <ProgressiveImage 
-        imageUrl={imageUrl} 
+      <ImageLoader 
+        src={imageUrl} 
         alt="Question illustration" 
       />
     </ImageContainer>
