@@ -321,8 +321,23 @@ const Quiz = () => {
   const [timer, setTimer] = useState(null);
   const [answers, setAnswers] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fullscreenError, setFullscreenError] = useState(null);
+  const quizContainerRef = React.useRef(null);
   const navigate = useNavigate();
   
+  // Function to request fullscreen mode
+  const enterFullscreen = async () => {
+    try {
+      if (quizContainerRef.current && !quizSecurity.isFullscreen()) {
+        await quizSecurity.requestFullscreen(quizContainerRef.current);
+        console.log("Entered fullscreen mode");
+      }
+    } catch (error) {
+      console.error("Error entering fullscreen mode:", error);
+      setFullscreenError("Your browser may not fully support the quiz security features. Please use a modern browser like Chrome or Firefox.");
+    }
+  };
+
   // Fetch quiz questions from Firebase
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -340,6 +355,11 @@ const Quiz = () => {
         
         setQuizData(shuffledQuestions);
         setLoading(false);
+
+        // Enter fullscreen mode when questions are loaded and ready
+        setTimeout(() => {
+          enterFullscreen();
+        }, 500);
       } catch (error) {
         console.error('Error fetching questions:', error);
         setLoading(false);
@@ -347,6 +367,13 @@ const Quiz = () => {
     };
     
     fetchQuestions();
+    
+    // Cleanup function - ensure we exit fullscreen when component unmounts
+    return () => {
+      if (quizSecurity.isFullscreen()) {
+        quizSecurity.exitFullscreen();
+      }
+    };
   }, []);
   
   // Initialize timer when a new question is displayed
@@ -372,6 +399,11 @@ const Quiz = () => {
         console.log("Quiz auto-submitted due to security violation");
         submitQuiz(answers);
       });
+      
+      // Ensure we're in fullscreen mode
+      if (!quizSecurity.isFullscreen()) {
+        enterFullscreen();
+      }
       
       return () => {
         clearInterval(countdown);
@@ -468,12 +500,11 @@ const Quiz = () => {
       setIsSubmitting(false);
     }
   };
-  
-  // Show loading state while fetching questions
+    // Show loading state while fetching questions
   if (loading) {
     return (
       <div className="quiz-page">
-        <QuizContainer>
+        <QuizContainer ref={quizContainerRef}>
           <LoadingTitle>Preparing Your Quiz</LoadingTitle>
           <p>Please wait while we load your questions...</p>
           <LoadingSpinner />
@@ -491,7 +522,7 @@ const Quiz = () => {
   if (quizData.length === 0) {
     return (
       <div className="quiz-page">
-        <QuizContainer>
+        <QuizContainer ref={quizContainerRef}>
           <DecorativeCircle className="top-right" />
           <DecorativeCircle className="bottom-left" />
           <LoadingTitle>No Questions Available</LoadingTitle>
@@ -508,7 +539,7 @@ const Quiz = () => {
   if (currentQuestionIndex >= quizData.length || isSubmitting) {
     return (
       <div className="quiz-page">
-        <QuizContainer>
+        <QuizContainer ref={quizContainerRef}>
           <DecorativeCircle className="top-right" />
           <DecorativeCircle className="bottom-left" />
           <LoadingTitle>Submitting Your Answers</LoadingTitle>
@@ -525,9 +556,15 @@ const Quiz = () => {
 
   return (
     <div className="quiz-page">
-      <QuizContainer>
+      <QuizContainer ref={quizContainerRef}>
         <DecorativeCircle className="top-right" />
         <DecorativeCircle className="bottom-left" />
+        
+        {fullscreenError && (
+          <div className="fullscreen-warning">
+            <p><strong>⚠️ Warning:</strong> {fullscreenError}</p>
+          </div>
+        )}
         
         <QuestionHeader>
           <TopHeader>
