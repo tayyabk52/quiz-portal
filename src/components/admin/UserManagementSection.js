@@ -620,28 +620,61 @@ const UserManagementSection = () => {
         .filter(user => selectedUsers.includes(user.email))
         .map(user => user.uid)
         .filter(uid => uid); // Filter out any undefined UIDs
-      
-      // If we don't have any UIDs (might happen if using fallback user data), 
+        // If we don't have any UIDs (might happen if using fallback user data), 
       // throw an error to use the fallback method
       if (selectedUids.length === 0) {
         throw new Error('No UIDs found for selected users');
       }
       
-      // Call the bulk delete API endpoint
-      const response = await fetch(`${API_URL}/users/bulk-delete`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ uids: selectedUids })
+      // Process in batches to avoid timeouts (max 20 users per batch)
+      const BATCH_SIZE = 20;
+      const allResults = {
+        successful: [],
+        failed: [],
+        total: selectedUids.length
+      };
+      
+      setStatusMessage({
+        type: 'info',
+        message: `Deleting ${selectedUids.length} users in batches...`
       });
       
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      // Split into batches if needed
+      const batches = [];
+      for (let i = 0; i < selectedUids.length; i += BATCH_SIZE) {
+        batches.push(selectedUids.slice(i, i + BATCH_SIZE));
       }
       
-      const results = await response.json();
+      // Process each batch
+      for (let i = 0; i < batches.length; i++) {
+        const batchUids = batches[i];
+        setStatusMessage({
+          type: 'info', 
+          message: `Processing batch ${i+1}/${batches.length} (${batchUids.length} users)...`
+        });
+        
+        // Call the bulk delete API endpoint for this batch
+        const response = await fetch(`${API_URL}/users/bulk-delete`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ uids: batchUids })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const batchResults = await response.json();
+        
+        // Combine batch results with overall results
+        allResults.successful = [...allResults.successful, ...batchResults.successful];
+        allResults.failed = [...allResults.failed, ...batchResults.failed];
+      }
+      
+      const results = allResults;
       
       setStatusMessage({
         type: 'success',

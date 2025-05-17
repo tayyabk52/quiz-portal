@@ -1,3 +1,36 @@
+// Enhanced logging function for better debugging
+const logWithContext = (level, message, context = {}) => {
+  const timestamp = new Date().toISOString();
+  const logData = {
+    timestamp,
+    level,
+    message,
+    ...context
+  };
+  
+  // Convert to a formatted string for the logs
+  const logString = `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+  
+  switch (level) {
+    case 'error':
+      console.error(logString, context);
+      break;
+    case 'warn':
+      console.warn(logString, context);
+      break;
+    case 'info':
+      console.log(logString, context);
+      break;
+    case 'debug':
+      if (process.env.DEBUG === 'true') {
+        console.log(logString, context);
+      }
+      break;
+    default:
+      console.log(logString, context);
+  }
+};
+
 // Helper function to safely convert Firebase/Firestore dates to ISO strings
 const safeFormatDate = (dateVal) => {
   if (!dateVal) return null;
@@ -166,5 +199,6 @@ module.exports = {
   createResponse,
   withErrorHandling,
   withAdminAuth,
-  safeFormatDate
+  safeFormatDate,
+  logWithContext
 };

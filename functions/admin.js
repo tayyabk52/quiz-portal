@@ -172,46 +172,91 @@ const adminFunctions = {
       throw error;
     }
   },
-  
-  // Bulk delete users
+    // Bulk delete users
   bulkDeleteUsers: async (uids) => {
     try {
+      console.log(`Starting bulk delete of ${uids.length} users`);
+      
       const results = {
         successful: [],
         failed: [],
-        total: uids.length
+        total: uids.length,
+        startTime: new Date().toISOString()
       };
+      
+      // Guard against too many operations at once
+      if (uids.length > 100) {
+        console.warn('Large batch detected. Processing first 100 users only.');
+        uids = uids.slice(0, 100);
+      }
       
       const firestore = admin.firestore();
       
-      // Process users sequentially to avoid Firebase quota limits
-      for (const uid of uids) {
-        try {
-          // Get user email before deleting
-          const userRecord = await admin.auth().getUser(uid);
-          const userEmail = userRecord.email;
-          
-          // Delete from Firebase Auth
-          await admin.auth().deleteUser(uid);
-          
-          // Delete from Firestore 'users' collection if exists
+      // Process in batches of 10 users at a time
+      const BATCH_SIZE = 10;
+      const batches = [];
+      
+      // Split into batches
+      for (let i = 0; i < uids.length; i += BATCH_SIZE) {
+        batches.push(uids.slice(i, i + BATCH_SIZE));
+      }
+      
+      console.log(`Processing ${batches.length} batches of users`);
+      
+      // Process each batch sequentially
+      for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+        const batch = batches[batchIndex];
+        console.log(`Processing batch ${batchIndex + 1}/${batches.length}, size: ${batch.length}`);
+        
+        // Process users in current batch
+        for (const uid of batch) {
           try {
-            await firestore.collection('users').doc(userEmail).delete();
-          } catch (firestoreError) {
-            console.warn(`Could not delete Firestore data for ${userEmail}:`, firestoreError);
+            console.log(`Deleting user with UID: ${uid}`);
+            
+            // Get user email before deleting
+            let userEmail;
+            try {
+              const userRecord = await admin.auth().getUser(uid);
+              userEmail = userRecord.email;
+            } catch (getUserError) {
+              console.warn(`Could not get user ${uid} before deletion:`, getUserError.message);
+            }
+            
+            // Delete from Firebase Auth
+            try {
+              await admin.auth().deleteUser(uid);
+            } catch (deleteAuthError) {
+              throw new Error(`Auth deletion failed: ${deleteAuthError.message}`);
+            }
+            
+            // Delete from Firestore 'users' collection if we got the email
+            if (userEmail) {
+              try {
+                await firestore.collection('users').doc(userEmail).delete();
+              } catch (firestoreError) {
+                console.warn(`Could not delete Firestore data for ${userEmail}:`, firestoreError.message);
+              }
+            }
+            
+            results.successful.push({
+              uid,
+              email: userEmail || 'unknown'
+            });
+            
+            console.log(`Successfully deleted user: ${uid}`);
+          } catch (error) {
+            console.error(`Failed to delete user ${uid}:`, error.message);
+            
+            results.failed.push({
+              uid,
+              error: error.message
+            });
           }
-          
-          results.successful.push({
-            uid,
-            email: userEmail
-          });
-        } catch (error) {
-          results.failed.push({
-            uid,
-            error: error.message
-          });
         }
       }
+      
+      results.endTime = new Date().toISOString();
+      console.log(`Bulk delete complete. Success: ${results.successful.length}, Failed: ${results.failed.length}`);
       
       return results;
     } catch (error) {
