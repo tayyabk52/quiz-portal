@@ -16,45 +16,56 @@ export const convertDriveUrl = (driveUrl) => {
     return driveUrl;
   }
   
-  // Handle standard Google Drive sharing URLs
-  // Format: https://drive.google.com/file/d/FILE_ID/view?usp=sharing
-  if (driveUrl.includes('drive.google.com/file/d/')) {
-    const fileIdMatch = driveUrl.match(/\/file\/d\/([^\/]+)/);
-    if (fileIdMatch && fileIdMatch[1]) {
-      const fileId = fileIdMatch[1].split('/')[0]; // Remove any trailing path components
+  try {
+    // Extract file ID using regex for standard Google Drive sharing URLs
+    // This covers formats like:
+    // - https://drive.google.com/file/d/FILE_ID/view?usp=sharing
+    // - https://drive.google.com/open?id=FILE_ID
+    // - Any URL with '/d/' pattern
+    
+    let fileId = null;
+    
+    // Standard file sharing format
+    if (driveUrl.includes('drive.google.com/file/d/')) {
+      const fileIdMatch = driveUrl.match(/\/file\/d\/([^\/\?]+)/);
+      if (fileIdMatch && fileIdMatch[1]) {
+        fileId = fileIdMatch[1];
+      }
+    }
+    
+    // Open link format
+    if (!fileId && driveUrl.includes('drive.google.com/open?id=')) {
+      const fileIdMatch = driveUrl.match(/id=([^&]+)/);
+      if (fileIdMatch && fileIdMatch[1]) {
+        fileId = fileIdMatch[1];
+      }
+    }
+    
+    // Generic /d/ format
+    if (!fileId && driveUrl.includes('/d/')) {
+      const sharingMatch = driveUrl.match(/\/d\/([^\/\?]+)/);
+      if (sharingMatch && sharingMatch[1]) {
+        fileId = sharingMatch[1];
+      }
+    }
+    
+    // If we found a file ID, use the reliable direct access format with both parameters
+    if (fileId) {
       return `https://drive.google.com/uc?export=view&id=${fileId}`;
     }
-  }
-  
-  // Handle alternate format Google Drive sharing URLs
-  // Format: https://drive.google.com/open?id=FILE_ID
-  if (driveUrl.includes('drive.google.com/open?id=')) {
-    const fileIdMatch = driveUrl.match(/id=([^&]+)/);
-    if (fileIdMatch && fileIdMatch[1]) {
-      return `https://drive.google.com/uc?export=view&id=${fileIdMatch[1]}`;
+    
+    // Handle Google Drive folder URLs which don't work as image sources
+    if (driveUrl.includes('drive.google.com/drive/folders/')) {
+      console.warn('Folder URLs cannot be used as direct image sources:', driveUrl);
+      return driveUrl;
     }
-  }
-  
-  // Handle Google Drive folder URLs with preview
-  if (driveUrl.includes('drive.google.com/drive/folders/')) {
-    // These don't typically work directly as image sources
-    // Return original URL and it will need to be manually fixed
+    
+    // Fallback to using the original URL
+    return driveUrl;
+  } catch (error) {
+    console.error('Error processing Google Drive URL:', error);
     return driveUrl;
   }
-    // Extract file ID from any Google Drive URL with "usp=sharing"
-  const sharingMatch = driveUrl.match(/\/d\/([^\/\?]+)/);
-  if (sharingMatch && sharingMatch[1]) {
-    return `https://drive.google.com/uc?export=view&id=${sharingMatch[1]}`;
-  }
-  
-  // Handle the exact format from your Firebase database (from screenshot)
-  if (driveUrl.includes('https://drive.google.com/file/d/') && driveUrl.includes('usp=sharing')) {
-    // Example: "https://drive.google.com/file/d/1L20Q_IzazNbHR0kIXPZ9jQ_AoQGNxFm9/view?usp=sharing"
-    const fileId = driveUrl.split('/file/d/')[1].split('/')[0];
-    return `https://drive.google.com/uc?export=view&id=${fileId}`;
-  }
-  
-  return driveUrl;
 };
 
 /**
