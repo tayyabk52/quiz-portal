@@ -219,8 +219,7 @@ const adminFunctions = {
       throw error;
     }
   },
-  
-  // Reset user password
+    // Reset user password by email (sends reset link)
   resetPassword: async (email) => {
     try {
       const link = await admin.auth().generatePasswordResetLink(email);
@@ -232,7 +231,29 @@ const adminFunctions = {
         message: 'Password reset link generated successfully'
       };
     } catch (error) {
-      console.error('Error resetting password:', error);
+      console.error('Error generating password reset link:', error);
+      throw error;
+    }
+  },
+  
+  // Reset user password by UID (directly sets new password)
+  resetUserPassword: async (uid, newPassword) => {
+    try {
+      if (!newPassword || newPassword.length < 6) {
+        throw new Error('Password must be at least 6 characters long');
+      }
+      
+      await admin.auth().updateUser(uid, {
+        password: newPassword
+      });
+      
+      return {
+        success: true,
+        uid,
+        message: 'Password has been reset successfully'
+      };
+    } catch (error) {
+      console.error('Error resetting user password:', error);
       throw error;
     }
   },

@@ -1,0 +1,44 @@
+// Netlify function for updating user information
+const { adminFunctions } = require('./admin');
+const { createResponse, withErrorHandling, withAdminAuth } = require('./utils');
+
+// Handler for the update-user function
+const handler = async (event, context) => {
+  if (event.httpMethod !== 'PUT' && event.httpMethod !== 'POST') {
+    return createResponse(405, { error: 'Method Not Allowed' });
+  }
+  
+  try {
+    // Parse request body
+    if (!event.body) {
+      return createResponse(400, { error: 'Request body is required' });
+    }
+    
+    const requestBody = JSON.parse(event.body);
+    const { uid, userData } = requestBody;
+    
+    console.log('Update user request for UID:', uid, 'with data:', JSON.stringify(userData));
+    
+    if (!uid) {
+      return createResponse(400, { error: 'User ID is required' });
+    }
+    
+    if (!userData || typeof userData !== 'object') {
+      return createResponse(400, { error: 'User data object is required' });
+    }
+    
+    // Use our adminFunctions to update the user - this handles both Auth and Firestore updates
+    const result = await adminFunctions.updateUser(uid, userData);
+    
+    return createResponse(200, result);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return createResponse(500, { 
+      error: error.message,
+      details: 'Failed to update user information'
+    });
+  }
+};
+
+// Export the function with error handling and admin auth wrappers
+exports.handler = withErrorHandling(withAdminAuth(handler));

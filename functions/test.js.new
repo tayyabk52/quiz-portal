@@ -1,0 +1,74 @@
+// Enhanced test function to verify Netlify Functions are working correctly
+const { createResponse } = require('./utils');
+
+exports.handler = async (event) => {
+  try {
+    console.log('Test function invoked', event.httpMethod, 'from', event.headers['client-ip'] || 'unknown IP');
+    
+    // Handle CORS preflight
+    if (event.httpMethod === 'OPTIONS') {
+      return {
+        statusCode: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS'
+        },
+        body: ''
+      };
+    }
+    
+    // Get environment info (without exposing sensitive data)
+    const environmentInfo = {
+      nodeVersion: process.version,
+      environment: process.env.NODE_ENV || 'unknown',
+      hasFirebaseEnvVars: {
+        projectId: !!process.env.FIREBASE_PROJECT_ID,
+        clientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+      },
+      netlifyInfo: {
+        site: process.env.SITE_NAME || process.env.URL || 'unknown',
+        deployID: process.env.DEPLOY_ID || 'unknown',
+        deployURL: process.env.DEPLOY_URL || 'unknown'
+      }
+    };
+    
+    // Test the admin module import (but don't actually initialize it)
+    let canImportAdmin = false;
+    try {
+      require('./admin');
+      canImportAdmin = true;
+    } catch (importError) {
+      console.error('Error importing admin module:', importError);
+    }
+    
+    // Create a comprehensive response
+    return createResponse(200, {
+      success: true,
+      message: 'API test function is working',
+      timestamp: new Date().toISOString(),
+      requestInfo: {
+        method: event.httpMethod,
+        path: event.path,
+        headers: {
+          host: event.headers.host,
+          referer: event.headers.referer,
+          userAgent: event.headers['user-agent'],
+        }
+      },
+      environment: environmentInfo,
+      adminModule: {
+        canImport: canImportAdmin
+      }
+    });
+  } catch (error) {
+    console.error('Error in test function:', error);
+    return createResponse(500, {
+      success: false,
+      message: 'Test function encountered an error',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};

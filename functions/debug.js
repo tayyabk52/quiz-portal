@@ -1,4 +1,7 @@
 // Netlify function for debugging environment and configuration
+const { admin } = require('./admin');
+const { createResponse, withErrorHandling } = require('./utils');
+
 exports.handler = async (event) => {
   try {
     // Handle CORS preflight
@@ -16,19 +19,47 @@ exports.handler = async (event) => {
     
     // Only respond to GET requests
     if (event.httpMethod !== 'GET') {
-      return {
-        statusCode: 405,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        },
-        body: JSON.stringify({ error: 'Method not allowed' })
-      };
+      return createResponse(405, { error: 'Method not allowed' });
+    }
+      // Test Firebase Admin SDK initialization
+    let firebaseAdminInitialized = false;
+    let authServiceWorking = false;
+    let firestoreServiceWorking = false;
+    let errorDetails = {};
+    
+    try {
+      if (admin.apps.length > 0) {
+        firebaseAdminInitialized = true;
+        
+        // Test auth service
+        try {
+          await admin.auth().listUsers(1);
+          authServiceWorking = true;
+        } catch (authError) {
+          errorDetails.auth = authError.message;
+        }
+        
+        // Test firestore service
+        try {
+          await admin.firestore().collection('users').limit(1).get();
+          firestoreServiceWorking = true;
+        } catch (firestoreError) {
+          errorDetails.firestore = firestoreError.message;
+        }
+      }
+    } catch (adminError) {
+      errorDetails.admin = adminError.message;
     }
     
     // Gather debug info
     const debugInfo = {
       timestamp: new Date().toISOString(),
+      firebase: {
+        adminInitialized: firebaseAdminInitialized,
+        authServiceWorking,
+        firestoreServiceWorking,
+        errorDetails: Object.keys(errorDetails).length > 0 ? errorDetails : undefined
+      },
       nodeVersion: process.version,
       environment: process.env.NODE_ENV || 'not set',
       netlifyEnvironment: process.env.CONTEXT || 'not set',

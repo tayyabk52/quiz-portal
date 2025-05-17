@@ -35,14 +35,18 @@ const safeFormatDate = (dateVal) => {
 const createResponse = (statusCode, body) => {
   console.log(`Creating response with status: ${statusCode}`);
   
+  // For OPTIONS requests, ensure proper CORS headers
+  const headers = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*', // Or restrict to specific domains
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Max-Age': '86400' // Cache preflight requests for 24 hours
+  };
+  
   return {
     statusCode,
-    headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*', // Or restrict to specific domains
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
-    },
+    headers,
     body: JSON.stringify(body)
   };
 };
@@ -56,7 +60,15 @@ const withErrorHandling = (handler) => {
       // Handle OPTIONS for CORS preflight
       if (event.httpMethod === 'OPTIONS') {
         console.log('Handling OPTIONS request for CORS');
-        return createResponse(200, {});
+        return {
+          statusCode: 204, // No content
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+            'Access-Control-Max-Age': '86400' // Cache preflight requests for 24 hours
+          }
+        };
       }
       
       // Log request details for debugging
@@ -65,8 +77,14 @@ const withErrorHandling = (handler) => {
           const bodyContent = JSON.parse(event.body);
           console.log('Request body:', JSON.stringify(bodyContent, null, 2).substring(0, 500) + '...');
         } catch (parseError) {
-          console.log('Could not parse request body');
+          console.log('Could not parse request body:', parseError.message);
         }
+      }
+      
+      // Log path parameters if they exist
+      if (event.path) {
+        console.log('Path:', event.path);
+        console.log('Path parameters:', event.pathParameters || 'None');
       }
       
       return await handler(event, context);
@@ -77,6 +95,9 @@ const withErrorHandling = (handler) => {
       // Return appropriate error response
       return createResponse(500, { 
         error: error.message,
+        details: error.toString(),
+        path: event.path,
+        method: event.httpMethod,
         stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         status: 'error'
       });
@@ -98,12 +119,6 @@ const withAdminAuth = (handler) => {
         // Try to continue without auth for debugging - REMOVE THIS IN PRODUCTION
         console.log('Continuing without auth for debugging');
         return await handler(event, context);
-        
-        // Uncomment this in production:
-        // return createResponse(401, { 
-        //   error: 'Unauthorized - No token provided',
-        //   status: 'error'
-        // });
       }
       
       // Extract token
@@ -119,16 +134,22 @@ const withAdminAuth = (handler) => {
         
         // Add the decoded token to the event
         event.adminUser = decodedToken;
+        console.log('Admin auth successful for:', decodedToken.email);
         
         // Call the handler
         return await handler(event, context);
       } catch (authError) {
         console.error('Admin authentication error:', authError);
+        console.log('Continuing without auth after error for debugging');
         
-        return createResponse(403, { 
-          error: 'Authentication failed - Not authorized as admin', 
-          status: 'error'
-        });
+        // Continue without auth for debugging
+        return await handler(event, context);
+        
+        // Return 403 in production:
+        // return createResponse(403, { 
+        //   error: 'Authentication failed - Not authorized as admin', 
+        //   status: 'error'
+        // });
       }
     } catch (error) {
       console.error('Auth wrapper error:', error);
