@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import styled from 'styled-components';
+import styled, { keyframes } from 'styled-components';
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebase/config';
 import quizSecurity from './QuizSecurity';
 import ImageLoader from '../common/ImageLoader';
+import './Quiz.css';
 
 // Use the common ImageLoader component for question images
 const QuestionImageComponent = ({ imageUrl }) => {
@@ -18,72 +19,203 @@ const QuestionImageComponent = ({ imageUrl }) => {
   );
 };
 
-// Quiz data will be loaded from Firebase
+// Animation keyframes
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
 
+const slideIn = keyframes`
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+`;
+
+const pulse = keyframes`
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+`;
+
+const spin = keyframes`
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+`;
+
+// Styled components for Quiz
 const QuizContainer = styled.div`
   max-width: 800px;
+  width: 90%;
   margin: 0 auto;
   background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  padding: 30px;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  padding: 40px;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+  transition: all 0.3s ease;
+  animation: ${fadeIn} 0.6s ease;
+  
+  @media (max-width: 768px) {
+    width: 95%;
+    padding: 30px 20px;
+    margin: 20px auto;
+    border-radius: 12px;
+  }
 `;
 
 const QuestionHeader = styled.div`
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  flex-direction: column;
+  margin-bottom: 30px;
 `;
 
-const QuestionNumber = styled.h3`
+const TopHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+`;
+
+const QuestionNumber = styled.div`
   color: var(--text-color);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+`;
+
+const QuestionCounter = styled.span`
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 14px;
 `;
 
 const Timer = styled.div`
-  font-size: 1.2rem;
-  background-color: ${props => props.timeRunningOut ? 'var(--warning-color)' : 'var(--primary-color)'};
+  font-size: 1rem;
+  background-color: ${props => props.timeRunningOut ? 'var(--warning-color, #ff9800)' : 'var(--primary-color)'};
   color: white;
-  padding: 8px 15px;
+  padding: 6px 14px;
   border-radius: 20px;
   display: flex;
   align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  box-shadow: ${props => props.timeRunningOut ? '0 4px 12px rgba(255, 152, 0, 0.3)' : '0 4px 12px rgba(66, 133, 244, 0.2)'};
+  transition: all 0.3s ease;
+  
+  &:before {
+    content: '⏱️';
+    font-size: 14px;
+  }
+  
+  ${props => props.timeRunningOut && `
+    animation: ${pulse} 0.7s infinite ease-in-out;
+  `}
 `;
 
 const Question = styled.h2`
   color: var(--primary-color);
-  margin-bottom: 20px;
+  margin-bottom: 30px;
+  font-size: 24px;
+  line-height: 1.4;
+  position: relative;
+  font-weight: 600;
+  animation: ${fadeIn} 0.5s ease;
+  
+  &:after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    width: 40px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary-light), var(--primary-color));
+    border-radius: 3px;
+  }
 `;
 
 const ImageContainer = styled.div`
   text-align: center;
-  margin-bottom: 30px;
+  margin: 30px auto;
+  max-width: 90%;
   min-height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    transform: translateY(-5px);
+  }
+  
+  img {
+    max-width: 100%;
+    border-radius: 12px;
+  }
 `;
 
 const OptionsContainer = styled.div`
-  margin-bottom: 30px;
+  margin-bottom: 35px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 `;
 
 const OptionButton = styled.button`
   width: 100%;
   background-color: ${props => props.selected ? 'var(--primary-color)' : 'white'};
   color: ${props => props.selected ? 'white' : 'var(--text-color)'};
-  border: 1px solid #ddd;
-  padding: 15px;
-  border-radius: 8px;
-  margin-bottom: 10px;
+  border: 1px solid ${props => props.selected ? 'var(--primary-color)' : '#eaeaea'};
+  padding: 16px 20px;
+  border-radius: 12px;
+  margin-bottom: 0;
   text-align: left;
   font-size: 16px;
   cursor: pointer;
-  transition: all 0.3s;
-
+  transition: all 0.3s ease;
+  box-shadow: ${props => props.selected ? '0 6px 12px rgba(66, 133, 244, 0.2)' : '0 2px 5px rgba(0, 0, 0, 0.05)'};
+  display: flex;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  animation: ${slideIn} 0.5s ease forwards;
+  animation-delay: ${props => props.index * 0.1}s;
+  opacity: 0;
+  
+  &:before {
+    content: ${props => props.selected ? '"✓"' : '""'};
+    font-weight: bold;
+    margin-right: ${props => props.selected ? '10px' : '0'};
+    color: white;
+  }
+  
   &:hover {
-    background-color: ${props => props.selected ? 'var(--primary-color)' : '#f0f0f0'};
+    background-color: ${props => props.selected ? 'var(--primary-dark)' : '#f7f9fc'};
+    transform: translateX(5px);
+  }
+  
+  &:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0) 100%);
+    transition: left 0.7s ease;
+  }
+  
+  &:hover:after {
+    left: 100%;
   }
 `;
 
@@ -91,21 +223,97 @@ const NavigationButton = styled.button`
   background-color: var(--primary-color);
   color: white;
   border: none;
-  padding: 12px 25px;
-  border-radius: 4px;
+  padding: 14px 28px;
+  border-radius: 8px;
   font-size: 16px;
-  font-weight: bold;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: all 0.3s ease;
   float: right;
+  box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3);
+  position: relative;
+  overflow: hidden;
+  min-width: 150px;
+  
+  &:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.2) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transition: left 0.7s ease;
+  }
 
-  &:hover {
-    background-color: #3367d6;
+  &:hover:not(:disabled) {
+    background-color: var(--primary-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(66, 133, 244, 0.4);
+    
+    &:before {
+      left: 100%;
+    }
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
   }
 
   &:disabled {
     background-color: #b3b3b3;
     cursor: not-allowed;
+    box-shadow: none;
+  }
+`;
+
+const LoadingContainer = styled.div`
+  text-align: center;
+  padding: 40px 20px;
+`;
+
+const LoadingTitle = styled.h2`
+  color: var(--primary-color);
+  margin-bottom: 20px;
+  font-size: 24px;
+`;
+
+const LoadingSpinner = styled.div`
+  width: 40px;
+  height: 40px;
+  margin: 20px auto;
+  border: 3px solid rgba(66, 133, 244, 0.2);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: ${spin} 1s linear infinite;
+`;
+
+const DecorativeCircle = styled.div`
+  position: absolute;
+  border-radius: 50%;
+  z-index: -1;
+  
+  &.top-right {
+    width: 180px;
+    height: 180px;
+    top: -90px;
+    right: -90px;
+    background: radial-gradient(circle, var(--primary-light) 0%, rgba(255,255,255,0) 70%);
+    opacity: 0.2;
+  }
+  
+  &.bottom-left {
+    width: 140px;
+    height: 140px;
+    bottom: -70px;
+    left: -70px;
+    background: radial-gradient(circle, var(--secondary-light) 0%, rgba(255,255,255,0) 70%);
+    opacity: 0.2;
   }
 `;
 
@@ -143,7 +351,9 @@ const Quiz = () => {
     };
     
     fetchQuestions();
-  }, []);  // Initialize timer when a new question is displayed
+  }, []);
+  
+  // Initialize timer when a new question is displayed
   useEffect(() => {
     if (quizData.length > 0 && currentQuestionIndex < quizData.length) {
       const timeLimit = quizData[currentQuestionIndex].timeLimit;
@@ -172,11 +382,12 @@ const Quiz = () => {
         quizSecurity.deactivate();
       };
     }
-  }, [currentQuestionIndex, quizData, answers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentQuestionIndex, quizData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOptionSelect = (optionIndex) => {
     setSelectedOption(optionIndex);
   };
+  
   const handleNext = () => {
     const currentQuestion = quizData[currentQuestionIndex];
     // Save the answer with more details
@@ -204,6 +415,7 @@ const Quiz = () => {
       submitQuiz([...answers, currentAnswer]);
     }
   };
+  
   const submitQuiz = async (finalAnswers) => {
     setIsSubmitting(true);
     
@@ -260,73 +472,112 @@ const Quiz = () => {
       setIsSubmitting(false);
     }
   };
+  
   // Show loading state while fetching questions
   if (loading) {
     return (
-      <QuizContainer>
-        <h2>Loading questions...</h2>
-        <p>Please wait while we prepare your quiz.</p>
-      </QuizContainer>
+      <div className="quiz-page">
+        <QuizContainer>
+          <LoadingTitle>Preparing Your Quiz</LoadingTitle>
+          <p>Please wait while we load your questions...</p>
+          <LoadingSpinner />
+          <div className="loading-dots">
+            <div className="loading-dot"></div>
+            <div className="loading-dot"></div>
+            <div className="loading-dot"></div>
+          </div>
+        </QuizContainer>
+      </div>
     );
   }
   
   // Check if there are any questions available
   if (quizData.length === 0) {
     return (
-      <QuizContainer>
-        <h2>No questions available</h2>
-        <p>There are no quiz questions available at this time. Please try again later or contact your instructor.</p>
-      </QuizContainer>
+      <div className="quiz-page">
+        <QuizContainer>
+          <DecorativeCircle className="top-right" />
+          <DecorativeCircle className="bottom-left" />
+          <LoadingTitle>No Questions Available</LoadingTitle>
+          <p>There are no quiz questions available at this time. Please try again later or contact your instructor.</p>
+          <NavigationButton onClick={() => navigate('/instructions')}>
+            Back to Instructions
+          </NavigationButton>
+        </QuizContainer>
+      </div>
     );
   }
 
   // If quiz is completed
-  if (currentQuestionIndex >= quizData.length) {
+  if (currentQuestionIndex >= quizData.length || isSubmitting) {
     return (
-      <QuizContainer>
-        <h2>Submitting your answers...</h2>
-        <p>Please wait while we process your results.</p>
-      </QuizContainer>
+      <div className="quiz-page">
+        <QuizContainer>
+          <DecorativeCircle className="top-right" />
+          <DecorativeCircle className="bottom-left" />
+          <LoadingTitle>Submitting Your Answers</LoadingTitle>
+          <p>Please wait while we process your results...</p>
+          <LoadingSpinner />
+        </QuizContainer>
+      </div>
     );
   }
 
   const currentQuestion = quizData[currentQuestionIndex];
   const isTimeRunningOut = timer <= 5;
+  const progressPercentage = ((currentQuestionIndex) / quizData.length) * 100;
 
   return (
-    <QuizContainer>
-      <QuestionHeader>
-        <QuestionNumber>
-          Question {currentQuestionIndex + 1} of {quizData.length}
-        </QuestionNumber>
-        <Timer timeRunningOut={isTimeRunningOut}>
-          Time left: {timer}s
-        </Timer>
-      </QuestionHeader>
-      
-      <Question>{currentQuestion.question}</Question>      {currentQuestion.imageUrl && (
-        <QuestionImageComponent imageUrl={currentQuestion.imageUrl} />
-      )}
-      
-      <OptionsContainer>
-        {currentQuestion.options.map((option, index) => (
-          <OptionButton
-            key={index}
-            selected={selectedOption === index}
-            onClick={() => handleOptionSelect(index)}
-          >
-            {option}
-          </OptionButton>
-        ))}
-      </OptionsContainer>
-      
-      <NavigationButton
-        onClick={handleNext}
-        disabled={isSubmitting}
-      >
-        {currentQuestionIndex < quizData.length - 1 ? 'Next Question' : 'Submit Quiz'}
-      </NavigationButton>
-    </QuizContainer>
+    <div className="quiz-page">
+      <QuizContainer>
+        <DecorativeCircle className="top-right" />
+        <DecorativeCircle className="bottom-left" />
+        
+        <QuestionHeader>
+          <TopHeader>
+            <QuestionNumber>
+              <div className="question-indicator">
+                Question <span className="question-indicator-current">{currentQuestionIndex + 1}</span> of {quizData.length}
+              </div>
+            </QuestionNumber>
+            <Timer timeRunningOut={isTimeRunningOut} className={isTimeRunningOut ? 'timer-warning' : ''}>
+              {timer}s
+            </Timer>
+          </TopHeader>
+          
+          <div className="progress-container">
+            <div className="progress-bar" style={{ width: `${progressPercentage}%` }}></div>
+          </div>
+        </QuestionHeader>
+        
+        <Question>{currentQuestion.question}</Question>
+        
+        {currentQuestion.imageUrl && (
+          <QuestionImageComponent imageUrl={currentQuestion.imageUrl} />
+        )}
+        
+        <OptionsContainer>
+          {currentQuestion.options.map((option, index) => (
+            <OptionButton
+              key={index}
+              index={index}
+              selected={selectedOption === index}
+              onClick={() => handleOptionSelect(index)}
+              className={selectedOption === index ? 'option-selected' : ''}
+            >
+              {option}
+            </OptionButton>
+          ))}
+        </OptionsContainer>
+        
+        <NavigationButton
+          onClick={handleNext}
+          disabled={isSubmitting}
+        >
+          {currentQuestionIndex < quizData.length - 1 ? 'Next Question' : 'Submit Quiz'}
+        </NavigationButton>
+      </QuizContainer>
+    </div>
   );
 };
 
