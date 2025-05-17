@@ -128,7 +128,6 @@ const UserManagementSection = () => {
   const handleFileUploadClick = () => {
     fileInputRef.current.click();
   };
-
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -153,7 +152,12 @@ const UserManagementSection = () => {
     reader.onload = (event) => {
       try {
         const csvContent = event.target.result;
+        console.log('CSV content (first 100 chars):', csvContent.substring(0, 100));
+        
         const parseResult = parseStudentAccountsFromCSV(csvContent);
+        console.log('Parse result:', parseResult.success ? 
+          `Success - Found ${parseResult.users.length} users` : 
+          `Error - ${parseResult.error}`);
         
         if (!parseResult.success) {
           setImportStatus({
@@ -163,12 +167,16 @@ const UserManagementSection = () => {
           return;
         }
 
+        console.log('First user in parsed data:', parseResult.users[0]);
         setParsedData(parseResult.users);
         
         // Validate the parsed data
         const validation = validateUserData(parseResult.users);
         setValidationResults(validation);
+        console.log('Validation result:', 
+          `Valid users: ${validation.validUsers.length}, Issues: ${validation.issues.length}`);
       } catch (error) {
+        console.error('CSV parsing error:', error);
         setImportStatus({
           ...importStatus,
           error: `Error parsing CSV: ${error.message}`
@@ -225,9 +233,16 @@ const UserManagementSection = () => {
       });
     }
   };
-
   const renderUserTable = () => {
-    if (!parsedData || parsedData.length === 0) return null;
+    console.log('Rendering user table, parsedData:', parsedData ? 
+      `${parsedData.length} users available` : 'No data available');
+      
+    if (!parsedData || parsedData.length === 0) return (
+      <div>
+        <p>No users found in the CSV file or the file format is incorrect.</p>
+        <p>Please make sure your CSV file contains columns named "Roll Number" and "Pass".</p>
+      </div>
+    );
     
     return (
       <div>

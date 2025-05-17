@@ -9,17 +9,18 @@
  */
 export const parseStudentAccountsFromCSV = (csvContent) => {
   try {
-    // Split the CSV content into lines
-    const lines = csvContent.split(/\\r?\\n/);
+    // Split the CSV content into lines (fix the backslash escaping)
+    const lines = csvContent.split(/\r?\n/);
     
     // Extract headers
     const headers = lines[0].split(',');
-    
-    // Find the indexes of Roll Number and Pass columns
+      // Find the indexes of Roll Number, Pass, and Email columns
     const rollNumberIndex = headers.findIndex(header => 
       header.trim().toLowerCase() === 'roll number');
     const passIndex = headers.findIndex(header => 
       header.trim().toLowerCase() === 'pass');
+    const emailIndex = headers.findIndex(header => 
+      header.trim().toLowerCase() === 'email');
     
     // Validate that required columns exist
     if (rollNumberIndex === -1 || passIndex === -1) {
@@ -30,27 +31,40 @@ export const parseStudentAccountsFromCSV = (csvContent) => {
       };
     }
     
+    // Log headers found for debugging
+    console.log('CSV headers found:', { 
+      rollNumberIndex, 
+      passIndex, 
+      emailIndex,
+      allHeaders: headers.map(h => h.trim())
+    });
+    
     // Process each line to extract user data
     const users = [];
     
-    // Start from index 2 to skip the header and the blank line
-    for (let i = 2; i < lines.length; i++) {
+    // Start from index 2 (or earlier if needed) to skip header and any blank lines
+    for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue; // Skip empty lines
       
       const columns = line.split(',');
-      
-      // Extract roll number and password
+        // Extract roll number and password
       const rollNumber = columns[rollNumberIndex]?.trim();
       const password = columns[passIndex]?.trim();
       
       // Skip if either is missing
       if (!rollNumber || !password) continue;
       
-      // Format the email based on the roll number
-      // Convert 24F-0584 to f240584@cfd.nu.edu.pk
-      const emailPrefix = rollNumber.replace('-', '').toLowerCase();
-      const email = `f${emailPrefix}@cfd.nu.edu.pk`;
+      // Get email from the CSV if available, otherwise format it based on roll number
+      let email;
+      if (emailIndex !== -1 && columns[emailIndex]) {
+        email = columns[emailIndex].trim();
+      } else {
+        // Format the email based on the roll number
+        // Convert 24F-0584 to f240584@cfd.nu.edu.pk
+        const emailPrefix = rollNumber.replace('-', '').toLowerCase();
+        email = `f${emailPrefix}@cfd.nu.edu.pk`;
+      }
       
       users.push({
         rollNumber,
