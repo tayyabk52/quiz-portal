@@ -387,48 +387,52 @@ const Quiz = () => {
         quizSecurity.deactivate();
       };
     }
-  }, [currentQuestionIndex, quizData, timerPaused]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Set up quiz security with fullscreen features
+  }, [currentQuestionIndex, quizData, timerPaused]); // eslint-disable-line react-hooks/exhaustive-deps  // Set up quiz security with fullscreen features
   const setupQuizSecurity = () => {
-    // Setup the fullscreen security with all necessary callbacks
-    quizSecurity.setupFullscreenSecurity({
-      onExit: () => {
-        console.log('Fullscreen exited');
-        setTimerPaused(true);
-        if (fullscreenWarningRef.current) {
-          fullscreenWarningRef.current.style.display = 'flex';
-        }
-      },
-      onReturn: () => {
-        console.log('Fullscreen returned');
-        setTimerPaused(false);
-        if (fullscreenWarningRef.current) {
-          fullscreenWarningRef.current.style.display = 'none';
-        }
-      },
-      onTimeout: () => {
-        console.log('Fullscreen exit timeout - submitting quiz');
-        submitQuiz(answers);
-      },
-      timerElement: fullscreenWarningRef.current?.querySelector('.fullscreen-warning-timer'),
-      pauseTimer: () => {
-        setTimerPaused(true);
-      },
-      resumeTimer: () => {
-        setTimerPaused(false);
-      },
-      countdownTime: 10
-    });
+    // Check if fullscreen is required - if we're no longer showing the prompt and we're in fullscreen,
+    // then fullscreen is required. Otherwise, the user opted to continue without fullscreen.
+    const fullscreenRequired = !showFullscreenPrompt && quizSecurity.checkFullscreen();
+
+    // If fullscreen is required, setup the fullscreen security features
+    if (fullscreenRequired) {
+      // Setup the fullscreen security with all necessary callbacks
+      quizSecurity.setupFullscreenSecurity({
+        onExit: () => {
+          console.log('Fullscreen exited');
+          setTimerPaused(true);
+          if (fullscreenWarningRef.current) {
+            fullscreenWarningRef.current.style.display = 'flex';
+          }
+        },
+        onReturn: () => {
+          console.log('Fullscreen returned');
+          setTimerPaused(false);
+          if (fullscreenWarningRef.current) {
+            fullscreenWarningRef.current.style.display = 'none';
+          }
+        },
+        onTimeout: () => {
+          console.log('Fullscreen exit timeout - submitting quiz');
+          submitQuiz(answers);
+        },
+        timerElement: fullscreenWarningRef.current?.querySelector('.fullscreen-warning-timer'),
+        pauseTimer: () => {
+          setTimerPaused(true);
+        },
+        resumeTimer: () => {
+          setTimerPaused(false);
+        },
+        countdownTime: 10
+      });
+    }
     
-    // Activate general security features
+    // Activate general security features, passing the fullscreen requirement flag
     quizSecurity.activate(() => {
       // Auto-submit quiz on second security violation
       console.log("Quiz auto-submitted due to security violation");
       submitQuiz(answers);
-    });
+    }, fullscreenRequired);
   };
-
   // Enter fullscreen mode
   const enterFullscreenMode = () => {
     quizSecurity.enterFullscreen(document.documentElement)
@@ -437,7 +441,11 @@ const Quiz = () => {
       })
       .catch((err) => {
         console.error('Failed to enter fullscreen:', err);
-        alert('Unable to enter fullscreen mode. Please try again or check your browser settings.');
+        const userChoice = window.confirm('Unable to enter fullscreen mode. Would you like to continue the quiz without fullscreen? Click Cancel to try again.');
+        if (userChoice) {
+          // User wants to continue without fullscreen
+          setShowFullscreenPrompt(false);
+        }
       });
   };
 
@@ -592,7 +600,6 @@ const Quiz = () => {
   const currentQuestion = quizData[currentQuestionIndex];
   const isTimeRunningOut = timer <= 5;
   const progressPercentage = ((currentQuestionIndex) / quizData.length) * 100;
-
   // Show fullscreen prompt before starting the quiz
   if (showFullscreenPrompt) {
     return (
@@ -605,9 +612,14 @@ const Quiz = () => {
               <p>This quiz requires fullscreen mode to maintain academic integrity. Please click the button below to enter fullscreen mode and begin the quiz.</p>
               <p>Important: Exiting fullscreen during the test will pause the timer and give you 10 seconds to return. If you don't return to fullscreen within this time, your quiz will be automatically submitted.</p>
             </div>
-            <button className="fullscreen-initial-button" onClick={enterFullscreenMode}>
-              Enter Fullscreen & Begin Quiz
-            </button>
+            <div className="fullscreen-button-container">
+              <button className="fullscreen-initial-button" onClick={enterFullscreenMode}>
+                Enter Fullscreen & Begin Quiz
+              </button>
+              <button className="fullscreen-discard-button" onClick={() => setShowFullscreenPrompt(false)}>
+                Continue Without Fullscreen
+              </button>
+            </div>
           </div>
         </div>
       </div>

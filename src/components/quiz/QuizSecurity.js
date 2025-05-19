@@ -3,8 +3,7 @@
  * to prevent cheating or unauthorized actions during quiz sessions.
  */
 
-class QuizSecurity {
-  constructor() {
+class QuizSecurity {  constructor() {
     this.warningShown = false;
     this.handler = null;
     this.callbackFn = null;
@@ -20,14 +19,16 @@ class QuizSecurity {
     this.exitTimerElement = null;
     this.countdownInterval = null;
     this.countdownValue = 10; // Default countdown time in seconds
+    this.fullscreenRequired = true; // By default, fullscreen is required
   }
-
   /**
    * Activates the security features to prevent leaving the quiz
    * @param {Function} onSecurityViolation - Callback function to execute when security is violated twice
+   * @param {boolean} fullscreenRequired - Whether fullscreen is required or optional
    */
-  activate(onSecurityViolation) {
+  activate(onSecurityViolation, fullscreenRequired = true) {
     this.callbackFn = onSecurityViolation;
+    this.fullscreenRequired = fullscreenRequired;
     
     // Handle tab/window visibility changes
     this.handler = this.handleVisibilityChange.bind(this);
@@ -64,12 +65,14 @@ class QuizSecurity {
       return e.returnValue;
     });
 
-    // Add fullscreen change detection
-    this.fullscreenExitHandler = this.handleFullscreenChange.bind(this);
-    document.addEventListener("fullscreenchange", this.fullscreenExitHandler);
-    document.addEventListener("webkitfullscreenchange", this.fullscreenExitHandler);
-    document.addEventListener("mozfullscreenchange", this.fullscreenExitHandler);
-    document.addEventListener("MSFullscreenChange", this.fullscreenExitHandler);
+    // Add fullscreen change detection only if fullscreen is required
+    if (fullscreenRequired) {
+      this.fullscreenExitHandler = this.handleFullscreenChange.bind(this);
+      document.addEventListener("fullscreenchange", this.fullscreenExitHandler);
+      document.addEventListener("webkitfullscreenchange", this.fullscreenExitHandler);
+      document.addEventListener("mozfullscreenchange", this.fullscreenExitHandler);
+      document.addEventListener("MSFullscreenChange", this.fullscreenExitHandler);
+    }
   }
 
   /**
@@ -174,11 +177,15 @@ class QuizSecurity {
            !!document.mozFullScreenElement || 
            !!document.msFullscreenElement;
   }
-
   /**
    * Handles fullscreen change events
    */
   handleFullscreenChange() {
+    // If fullscreen is not required, don't do anything
+    if (!this.fullscreenRequired) {
+      return;
+    }
+    
     const isFullscreenNow = this.checkFullscreen();
     
     if (isFullscreenNow) {
