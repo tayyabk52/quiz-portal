@@ -355,8 +355,7 @@ const Quiz = () => {
     
     fetchQuestions();
   }, []);
-  
-  // Initialize timer when a new question is displayed
+    // Initialize timer when a new question is displayed
   useEffect(() => {
     if (quizData.length > 0 && currentQuestionIndex < quizData.length) {
       const timeLimit = quizData[currentQuestionIndex].timeLimit;
@@ -378,21 +377,63 @@ const Quiz = () => {
           });
         }, 1000);
       }
+        // Create a reference to the ESC key handler
+      const escKeyHandler = (e) => {
+        if (e.key === 'Escape') {
+          console.log('ESC key intercepted');
+          e.preventDefault();
+          e.stopPropagation();
+          
+          // Force the warning to show when ESC is pressed
+          setTimeout(() => {
+            if (!quizSecurity.checkFullscreen()) {
+              console.log('Fullscreen exited via ESC key - showing warning');
+              if (fullscreenWarningRef.current) {
+                fullscreenWarningRef.current.style.display = 'flex';
+                
+                // Force the timer to update
+                const timerElement = fullscreenWarningRef.current.querySelector('.fullscreen-warning-timer');
+                if (timerElement) {
+                  timerElement.textContent = '10';
+                }
+                
+                // Make sure the timer is working by manually triggering the security function
+                quizSecurity.isFullscreen = false;
+                quizSecurity.startFullscreenExitTimer();
+                setTimerPaused(true);
+              }
+            }
+          }, 100);
+          return false;
+        }
+      };
       
-      // Setup fullscreen security features
-      setupQuizSecurity();
+      // Add the ESC key handler
+      document.addEventListener('keydown', escKeyHandler, true);
       
+      // Wait for the DOM to be fully rendered before setting up security
+      // This ensures all refs are properly initialized
+      setTimeout(() => {
+        // Setup fullscreen security features
+        setupQuizSecurity();
+      }, 100);
+      
+      // Cleanup function
       return () => {
         if (countdown) clearInterval(countdown);
+        // Remove the ESC key handler
+        document.removeEventListener('keydown', escKeyHandler, true);
         quizSecurity.deactivate();
       };
     }
-  }, [currentQuestionIndex, quizData, timerPaused]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  }, [currentQuestionIndex, quizData, timerPaused]);// eslint-disable-line react-hooks/exhaustive-deps
   // Set up quiz security with fullscreen features
   const setupQuizSecurity = () => {
     // Fullscreen is always required, no option to bypass
     const fullscreenRequired = true;
+    
+    // Get reference to the timer element directly
+    const timerElement = fullscreenWarningRef.current?.querySelector('.fullscreen-warning-timer');
     
     // Setup the fullscreen security with all necessary callbacks
     quizSecurity.setupFullscreenSecurity({
@@ -402,6 +443,11 @@ const Quiz = () => {
         // Make sure the warning is displayed
         if (fullscreenWarningRef.current) {
           fullscreenWarningRef.current.style.display = 'flex';
+        }
+        
+        // Force update the timer element (redundancy to ensure it's showing)
+        if (timerElement) {
+          timerElement.textContent = '10';
         }
       },
       onReturn: () => {
@@ -415,7 +461,7 @@ const Quiz = () => {
         console.log('Fullscreen exit timeout - submitting quiz');
         submitQuiz(answers);
       },
-      timerElement: fullscreenWarningRef.current?.querySelector('.fullscreen-warning-timer'),
+      timerElement: timerElement,
       pauseTimer: () => {
         setTimerPaused(true);
       },
@@ -432,9 +478,10 @@ const Quiz = () => {
       submitQuiz(answers);
     }, fullscreenRequired);
   };
-  
   // Enter fullscreen mode
   const enterFullscreenMode = () => {
+    // ESC key handling is now implemented in the useEffect hook for better lifecycle management
+    
     quizSecurity.enterFullscreen(document.documentElement)
       .then(() => {
         setShowFullscreenPrompt(false);
@@ -635,10 +682,18 @@ const Quiz = () => {
           </p>
           <div className="fullscreen-warning-timer">10</div>
           <p><strong>CRITICAL WARNING</strong>: Your quiz will be automatically submitted and you will 
-          receive a score of ZERO if you don't return to fullscreen within the time shown above.</p>
-          <button 
+          receive a score of ZERO if you don't return to fullscreen within the time shown above.</p>          <button 
             className="fullscreen-warning-button" 
-            onClick={() => quizSecurity.enterFullscreen(document.documentElement)}>
+            onClick={() => {
+              // Ensure we re-enter fullscreen and restart the quiz flow
+              quizSecurity.enterFullscreen(document.documentElement)
+                .then(() => {
+                  // Make sure the warning is hidden after returning to fullscreen
+                  if (fullscreenWarningRef.current) {
+                    fullscreenWarningRef.current.style.display = 'none';
+                  }
+                });
+            }}>
             Return to Fullscreen
           </button>
         </div>

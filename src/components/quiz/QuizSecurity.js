@@ -177,8 +177,7 @@ class QuizSecurity {  constructor() {
            !!document.msFullscreenElement;
   }  /**
    * Handles fullscreen change events
-   */
-  handleFullscreenChange() {
+   */  handleFullscreenChange() {
     // Fullscreen is always required
     this.fullscreenRequired = true;
     
@@ -187,6 +186,8 @@ class QuizSecurity {  constructor() {
     if (isFullscreenNow) {
       // User returned to fullscreen
       this.isFullscreen = true;
+      
+      // Clear any existing timers immediately
       this.clearFullscreenExitTimer();
       
       // Call the fullscreen return callback if provided
@@ -203,23 +204,30 @@ class QuizSecurity {  constructor() {
       if (this.exitTimerElement) {
         this.exitTimerElement.style.display = 'none';
       }
-    } else if (this.isFullscreen) {
-      // User exited fullscreen but was previously in fullscreen mode
-      this.isFullscreen = false;
-      this.exitFullscreenTime = new Date();
-      
-      // Call the fullscreen exit callback if provided
-      if (this.onFullscreenExit) {
-        this.onFullscreenExit();
+    } else {
+      // User exited fullscreen (or was never in fullscreen)
+      // This handles ESC key and all other methods of exiting fullscreen
+      if (this.isFullscreen) { // Only trigger if we were previously in fullscreen
+        this.isFullscreen = false;
+        this.exitFullscreenTime = new Date();
+        
+        // Call the fullscreen exit callback if provided
+        if (this.onFullscreenExit) {
+          this.onFullscreenExit();
+        }
+        
+        // Pause the timer if callback is provided
+        if (this.pauseTimerCallback) {
+          this.pauseTimerCallback();
+        }
+        
+        // Clear any existing timers before starting a new one (in case there was a leftover timer)
+        this.clearFullscreenExitTimer();
+        
+        // Start the countdown for auto-submit
+        this.startFullscreenExitTimer();
+        console.log('Started fullscreen exit timer');
       }
-      
-      // Pause the timer if callback is provided
-      if (this.pauseTimerCallback) {
-        this.pauseTimerCallback();
-      }
-      
-      // Start the countdown for auto-submit
-      this.startFullscreenExitTimer();
     }
   }
 
@@ -252,41 +260,51 @@ class QuizSecurity {  constructor() {
 
   /**
    * Starts the timer for returning to fullscreen
-   */
-  startFullscreenExitTimer() {
-    // Clear any existing timer
+   */  startFullscreenExitTimer() {
+    // Clear any existing timer to prevent duplicates
     this.clearFullscreenExitTimer();
     
-    // Create a new countdown
+    // Create a new countdown starting from the full value
     let countdown = this.countdownValue;
     
+    // Force update the timer element immediately
     if (this.exitTimerElement) {
-      this.exitTimerElement.style.display = 'block';
-      this.exitTimerElement.textContent = `Please return to fullscreen. Auto-submitting in ${countdown} seconds...`;
+      this.exitTimerElement.textContent = countdown.toString();
+      console.log(`Timer display initialized: ${countdown}`);
     }
     
+    // Start the interval timer for countdown
     this.countdownInterval = setInterval(() => {
       countdown--;
       
+      // Update timer display
       if (this.exitTimerElement) {
-        this.exitTimerElement.textContent = `Please return to fullscreen. Auto-submitting in ${countdown} seconds...`;
+        this.exitTimerElement.textContent = countdown.toString();
+        console.log(`Timer counting down: ${countdown}`);
       }
       
+      // Check if countdown has expired
       if (countdown <= 0) {
         this.clearFullscreenExitTimer();
         
         // If time is up and still not in fullscreen, trigger the callback
         if (!this.checkFullscreen() && this.callbackFn) {
+          console.log("Auto-submitting due to fullscreen exit timeout");
           this.callbackFn();
+          return; // Exit early to prevent any race conditions
         }
       }
     }, 1000);
-    
-    // Set a timeout to auto-submit if not returned to fullscreen
+      // Set a timeout to auto-submit if not returned to fullscreen
+    // This serves as a backup in case the interval fails or is cleared
     this.fullscreenExitWarningTimer = setTimeout(() => {
       this.clearFullscreenExitTimer();
       
       if (!this.checkFullscreen() && this.callbackFn) {
+        console.log("Auto-submitting from timeout fallback");
+        // Store a flag to mark that auto-submit was triggered
+        this.autoSubmitTriggered = true;
+        // Call the callback function to submit the quiz
         this.callbackFn();
       }
     }, this.countdownValue * 1000);
