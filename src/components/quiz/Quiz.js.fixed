@@ -441,9 +441,7 @@ const Quiz = () => {
       })
       .catch((err) => {
         console.error('Failed to enter fullscreen:', err);
-        alert('Unable to enter fullscreen mode. Please try again or press F11 to enter fullscreen mode. Fullscreen mode is REQUIRED to take the quiz. You cannot proceed without entering fullscreen mode.');
-        // Keep showing the fullscreen prompt if there's an error
-        setShowFullscreenPrompt(true);
+        alert('Unable to enter fullscreen mode. Please try again or press F11 to enter fullscreen mode. Fullscreen mode is required to take the quiz.');
       });
   };
 
@@ -628,14 +626,14 @@ const Quiz = () => {
       {/* Fullscreen Exit Warning Overlay */}
       <div className="fullscreen-warning-container" ref={fullscreenWarningRef}>
         <div className="fullscreen-warning">
-          <div className="fullscreen-warning-icon">⚠️</div>          <h2 className="fullscreen-warning-title">⚠️ SECURITY VIOLATION: Fullscreen Mode Required ⚠️</h2>
+          <div className="fullscreen-warning-icon">⚠️</div>
+          <h2 className="fullscreen-warning-title">⚠️ Warning: Fullscreen Mode Required ⚠️</h2>
           <p className="fullscreen-warning-message">
-            <strong>WARNING: You have exited fullscreen mode!</strong> The quiz timer has been paused 
-            and this incident has been logged. You MUST return to fullscreen mode immediately to continue.
+            <strong>You have exited fullscreen mode.</strong> The quiz timer has been paused.
+            You must return to fullscreen mode to continue with your quiz.
           </p>
           <div className="fullscreen-warning-timer">10</div>
-          <p><strong>CRITICAL WARNING</strong>: Your quiz will be automatically submitted and you will 
-          receive a score of ZERO if you don't return to fullscreen within the time shown above.</p>
+          <p><strong>IMPORTANT</strong>: Your quiz will be automatically submitted if you don't return to fullscreen within the time shown above.</p>
           <button 
             className="fullscreen-warning-button" 
             onClick={() => quizSecurity.enterFullscreen(document.documentElement)}>

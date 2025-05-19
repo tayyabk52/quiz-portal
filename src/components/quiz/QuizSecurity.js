@@ -19,16 +19,15 @@ class QuizSecurity {  constructor() {
     this.exitTimerElement = null;
     this.countdownInterval = null;
     this.countdownValue = 10; // Default countdown time in seconds
-    this.fullscreenRequired = true; // By default, fullscreen is required
-  }
-  /**
+    this.fullscreenRequired = true; // Fullscreen is always required - no option to bypass
+  }/**
    * Activates the security features to prevent leaving the quiz
    * @param {Function} onSecurityViolation - Callback function to execute when security is violated twice
-   * @param {boolean} fullscreenRequired - Whether fullscreen is required or optional
+   * @param {boolean} fullscreenRequired - Whether fullscreen is required or optional (always true now)
    */
   activate(onSecurityViolation, fullscreenRequired = true) {
     this.callbackFn = onSecurityViolation;
-    this.fullscreenRequired = fullscreenRequired;
+    this.fullscreenRequired = true; // Always enforced
     
     // Handle tab/window visibility changes
     this.handler = this.handleVisibilityChange.bind(this);
@@ -176,15 +175,12 @@ class QuizSecurity {  constructor() {
            !!document.webkitFullscreenElement || 
            !!document.mozFullScreenElement || 
            !!document.msFullscreenElement;
-  }
-  /**
+  }  /**
    * Handles fullscreen change events
    */
   handleFullscreenChange() {
-    // If fullscreen is not required, don't do anything
-    if (!this.fullscreenRequired) {
-      return;
-    }
+    // Fullscreen is always required
+    this.fullscreenRequired = true;
     
     const isFullscreenNow = this.checkFullscreen();
     
@@ -236,15 +232,14 @@ class QuizSecurity {  constructor() {
    * @param {Function} pauseTimer - Callback to pause the quiz timer
    * @param {Function} resumeTimer - Callback to resume the quiz timer
    * @param {number} countdownTime - Time in seconds to allow returning to fullscreen
-   */
-  setupFullscreenSecurity({
+   */  setupFullscreenSecurity({
     onExit,
     onReturn,
     onTimeout,
     timerElement,
     pauseTimer,
     resumeTimer,
-    countdownTime = 10
+    countdownTime = 8 // Reduced countdown time to be more strict
   }) {
     this.onFullscreenExit = onExit;
     this.onFullscreenReturn = onReturn;
