@@ -8,6 +8,18 @@ class QuizSecurity {
     this.warningShown = false;
     this.handler = null;
     this.callbackFn = null;
+    this.fullscreenExitHandler = null;
+    this.isFullscreen = false;
+    this.exitFullscreenTime = null;
+    this.fullscreenExitWarningTimer = null;
+    this.onFullscreenExit = null;
+    this.onFullscreenReturn = null;
+    this.timerElement = null;
+    this.pauseTimerCallback = null;
+    this.resumeTimerCallback = null;
+    this.exitTimerElement = null;
+    this.countdownInterval = null;
+    this.countdownValue = 10; // Default countdown time in seconds
   }
 
   /**
@@ -51,6 +63,13 @@ class QuizSecurity {
       e.returnValue = "Are you sure you want to leave the quiz? Your progress will be lost.";
       return e.returnValue;
     });
+
+    // Add fullscreen change detection
+    this.fullscreenExitHandler = this.handleFullscreenChange.bind(this);
+    document.addEventListener("fullscreenchange", this.fullscreenExitHandler);
+    document.addEventListener("webkitfullscreenchange", this.fullscreenExitHandler);
+    document.addEventListener("mozfullscreenchange", this.fullscreenExitHandler);
+    document.addEventListener("MSFullscreenChange", this.fullscreenExitHandler);
   }
 
   /**
@@ -87,8 +106,203 @@ class QuizSecurity {
     document.removeEventListener("keydown", (e) => e.preventDefault());
     window.removeEventListener("beforeunload", (e) => e.preventDefault());
     
+    // Remove fullscreen event listeners
+    if (this.fullscreenExitHandler) {
+      document.removeEventListener("fullscreenchange", this.fullscreenExitHandler);
+      document.removeEventListener("webkitfullscreenchange", this.fullscreenExitHandler);
+      document.removeEventListener("mozfullscreenchange", this.fullscreenExitHandler);
+      document.removeEventListener("MSFullscreenChange", this.fullscreenExitHandler);
+      this.fullscreenExitHandler = null;
+    }
+
+    // Clear any active countdown timers
+    this.clearFullscreenExitTimer();
+    
     this.warningShown = false;
     this.callbackFn = null;
+    this.isFullscreen = false;
+    this.onFullscreenExit = null;
+    this.onFullscreenReturn = null;
+    this.pauseTimerCallback = null;
+    this.resumeTimerCallback = null;
+  }
+
+  /**
+   * Enters full screen mode
+   * @param {HTMLElement} element - The element to make fullscreen (default: document.documentElement)
+   * @returns {Promise<void>} - A promise that resolves when fullscreen is entered
+   */
+  enterFullscreen(element = document.documentElement) {
+    this.isFullscreen = true;
+    if (element.requestFullscreen) {
+      return element.requestFullscreen();
+    } else if (element.webkitRequestFullscreen) { 
+      return element.webkitRequestFullscreen();
+    } else if (element.mozRequestFullScreen) { 
+      return element.mozRequestFullScreen();
+    } else if (element.msRequestFullscreen) {
+      return element.msRequestFullscreen();
+    }
+    return Promise.reject("Fullscreen API not supported");
+  }
+
+  /**
+   * Exits full screen mode
+   * @returns {Promise<void>} - A promise that resolves when fullscreen is exited
+   */
+  exitFullscreen() {
+    this.isFullscreen = false;
+    if (document.exitFullscreen) {
+      return document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) {
+      return document.webkitExitFullscreen();
+    } else if (document.mozCancelFullScreen) {
+      return document.mozCancelFullScreen();
+    } else if (document.msExitFullscreen) {
+      return document.msExitFullscreen();
+    }
+    return Promise.reject("Fullscreen API not supported");
+  }
+
+  /**
+   * Checks if the browser is in fullscreen mode
+   * @returns {boolean} - Whether the browser is in fullscreen mode
+   */
+  checkFullscreen() {
+    return !!document.fullscreenElement || 
+           !!document.webkitFullscreenElement || 
+           !!document.mozFullScreenElement || 
+           !!document.msFullscreenElement;
+  }
+
+  /**
+   * Handles fullscreen change events
+   */
+  handleFullscreenChange() {
+    const isFullscreenNow = this.checkFullscreen();
+    
+    if (isFullscreenNow) {
+      // User returned to fullscreen
+      this.isFullscreen = true;
+      this.clearFullscreenExitTimer();
+      
+      // Call the fullscreen return callback if provided
+      if (this.onFullscreenReturn) {
+        this.onFullscreenReturn();
+      }
+      
+      // Resume the timer if callback is provided
+      if (this.resumeTimerCallback) {
+        this.resumeTimerCallback();
+      }
+
+      // Hide the exit warning if it was displayed
+      if (this.exitTimerElement) {
+        this.exitTimerElement.style.display = 'none';
+      }
+    } else if (this.isFullscreen) {
+      // User exited fullscreen but was previously in fullscreen mode
+      this.isFullscreen = false;
+      this.exitFullscreenTime = new Date();
+      
+      // Call the fullscreen exit callback if provided
+      if (this.onFullscreenExit) {
+        this.onFullscreenExit();
+      }
+      
+      // Pause the timer if callback is provided
+      if (this.pauseTimerCallback) {
+        this.pauseTimerCallback();
+      }
+      
+      // Start the countdown for auto-submit
+      this.startFullscreenExitTimer();
+    }
+  }
+
+  /**
+   * Sets up fullscreen security with callbacks
+   * @param {Function} onExit - Callback when fullscreen is exited
+   * @param {Function} onReturn - Callback when fullscreen is reentered
+   * @param {Function} onTimeout - Callback when the return timer expires
+   * @param {HTMLElement} timerEl - Element to display the countdown timer
+   * @param {Function} pauseTimer - Callback to pause the quiz timer
+   * @param {Function} resumeTimer - Callback to resume the quiz timer
+   * @param {number} countdownTime - Time in seconds to allow returning to fullscreen
+   */
+  setupFullscreenSecurity({
+    onExit,
+    onReturn,
+    onTimeout,
+    timerElement,
+    pauseTimer,
+    resumeTimer,
+    countdownTime = 10
+  }) {
+    this.onFullscreenExit = onExit;
+    this.onFullscreenReturn = onReturn;
+    this.callbackFn = onTimeout;
+    this.exitTimerElement = timerElement;
+    this.pauseTimerCallback = pauseTimer;
+    this.resumeTimerCallback = resumeTimer;
+    this.countdownValue = countdownTime;
+  }
+
+  /**
+   * Starts the timer for returning to fullscreen
+   */
+  startFullscreenExitTimer() {
+    // Clear any existing timer
+    this.clearFullscreenExitTimer();
+    
+    // Create a new countdown
+    let countdown = this.countdownValue;
+    
+    if (this.exitTimerElement) {
+      this.exitTimerElement.style.display = 'block';
+      this.exitTimerElement.textContent = `Please return to fullscreen. Auto-submitting in ${countdown} seconds...`;
+    }
+    
+    this.countdownInterval = setInterval(() => {
+      countdown--;
+      
+      if (this.exitTimerElement) {
+        this.exitTimerElement.textContent = `Please return to fullscreen. Auto-submitting in ${countdown} seconds...`;
+      }
+      
+      if (countdown <= 0) {
+        this.clearFullscreenExitTimer();
+        
+        // If time is up and still not in fullscreen, trigger the callback
+        if (!this.checkFullscreen() && this.callbackFn) {
+          this.callbackFn();
+        }
+      }
+    }, 1000);
+    
+    // Set a timeout to auto-submit if not returned to fullscreen
+    this.fullscreenExitWarningTimer = setTimeout(() => {
+      this.clearFullscreenExitTimer();
+      
+      if (!this.checkFullscreen() && this.callbackFn) {
+        this.callbackFn();
+      }
+    }, this.countdownValue * 1000);
+  }
+
+  /**
+   * Clears the fullscreen exit timer
+   */
+  clearFullscreenExitTimer() {
+    if (this.fullscreenExitWarningTimer) {
+      clearTimeout(this.fullscreenExitWarningTimer);
+      this.fullscreenExitWarningTimer = null;
+    }
+    
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+      this.countdownInterval = null;
+    }
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import styled, { keyframes } from 'styled-components';
 import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -319,9 +319,16 @@ const Quiz = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState(null);
   const [timer, setTimer] = useState(null);
+  const [timerPaused, setTimerPaused] = useState(false);
   const [answers, setAnswers] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(true);
   const navigate = useNavigate();
+  
+  // Refs to access DOM elements
+  const fullscreenWarningRef = useRef(null);
+  const quizContainerRef = useRef(null);
+  const lastTimerValue = useRef(null);
   
   // Fetch quiz questions from Firebase
   useEffect(() => {
@@ -354,31 +361,85 @@ const Quiz = () => {
     if (quizData.length > 0 && currentQuestionIndex < quizData.length) {
       const timeLimit = quizData[currentQuestionIndex].timeLimit;
       setTimer(timeLimit);
+      lastTimerValue.current = timeLimit;
       
-      const countdown = setInterval(() => {
-        setTimer((prevTimer) => {
-          if (prevTimer <= 1) {
-            clearInterval(countdown);
-            handleNext();
-            return 0;
-          }
-          return prevTimer - 1;
-        });
-      }, 1000);
+      let countdown;
       
-      // Activate security features
-      quizSecurity.activate(() => {
-        // Auto-submit quiz on second security violation
-        console.log("Quiz auto-submitted due to security violation");
-        submitQuiz(answers);
-      });
+      if (!timerPaused) {
+        countdown = setInterval(() => {
+          setTimer((prevTimer) => {
+            if (prevTimer <= 1) {
+              clearInterval(countdown);
+              handleNext();
+              return 0;
+            }
+            lastTimerValue.current = prevTimer - 1;
+            return prevTimer - 1;
+          });
+        }, 1000);
+      }
+      
+      // Setup fullscreen security features
+      setupQuizSecurity();
       
       return () => {
-        clearInterval(countdown);
+        if (countdown) clearInterval(countdown);
         quizSecurity.deactivate();
       };
     }
-  }, [currentQuestionIndex, quizData]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentQuestionIndex, quizData, timerPaused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Set up quiz security with fullscreen features
+  const setupQuizSecurity = () => {
+    // Setup the fullscreen security with all necessary callbacks
+    quizSecurity.setupFullscreenSecurity({
+      onExit: () => {
+        console.log('Fullscreen exited');
+        setTimerPaused(true);
+        if (fullscreenWarningRef.current) {
+          fullscreenWarningRef.current.style.display = 'flex';
+        }
+      },
+      onReturn: () => {
+        console.log('Fullscreen returned');
+        setTimerPaused(false);
+        if (fullscreenWarningRef.current) {
+          fullscreenWarningRef.current.style.display = 'none';
+        }
+      },
+      onTimeout: () => {
+        console.log('Fullscreen exit timeout - submitting quiz');
+        submitQuiz(answers);
+      },
+      timerElement: fullscreenWarningRef.current?.querySelector('.fullscreen-warning-timer'),
+      pauseTimer: () => {
+        setTimerPaused(true);
+      },
+      resumeTimer: () => {
+        setTimerPaused(false);
+      },
+      countdownTime: 10
+    });
+    
+    // Activate general security features
+    quizSecurity.activate(() => {
+      // Auto-submit quiz on second security violation
+      console.log("Quiz auto-submitted due to security violation");
+      submitQuiz(answers);
+    });
+  };
+
+  // Enter fullscreen mode
+  const enterFullscreenMode = () => {
+    quizSecurity.enterFullscreen(document.documentElement)
+      .then(() => {
+        setShowFullscreenPrompt(false);
+      })
+      .catch((err) => {
+        console.error('Failed to enter fullscreen:', err);
+        alert('Unable to enter fullscreen mode. Please try again or check your browser settings.');
+      });
+  };
 
   const handleOptionSelect = (optionIndex) => {
     setSelectedOption(optionIndex);
@@ -400,7 +461,8 @@ const Quiz = () => {
       maxScore: currentQuestion.score || 1
     };
     
-    setAnswers([...answers, currentAnswer]);
+    const newAnswers = [...answers, currentAnswer];
+    setAnswers(newAnswers);
     
     // Move to the next question or submit if it's the last one
     if (currentQuestionIndex < quizData.length - 1) {
@@ -408,7 +470,7 @@ const Quiz = () => {
       setSelectedOption(null);
     } else {
       // This is the last question, submit the quiz
-      submitQuiz([...answers, currentAnswer]);
+      submitQuiz(newAnswers);
     }
   };
   
@@ -416,6 +478,9 @@ const Quiz = () => {
     setIsSubmitting(true);
     
     try {
+      // Try to deactivate security features before submitting
+      quizSecurity.deactivate();
+      
       const currentUser = auth.currentUser;
       
       if (!currentUser) {
@@ -449,6 +514,11 @@ const Quiz = () => {
         timeTaken: finalAnswers.length * 30, // Approximate time taken (30 seconds per question)
         submittedAt: serverTimestamp()
       });
+      
+      // Exit fullscreen before navigating to results
+      if (quizSecurity.checkFullscreen()) {
+        await quizSecurity.exitFullscreen();
+      }
       
       // Navigate to results page
       navigate('/result', { 
@@ -523,9 +593,49 @@ const Quiz = () => {
   const isTimeRunningOut = timer <= 5;
   const progressPercentage = ((currentQuestionIndex) / quizData.length) * 100;
 
+  // Show fullscreen prompt before starting the quiz
+  if (showFullscreenPrompt) {
+    return (
+      <div className="quiz-page">
+        <div className="fullscreen-initial-message">
+          <div className="fullscreen-initial-content">
+            <div className="fullscreen-initial-icon">⚠️</div>
+            <h2 className="fullscreen-initial-title">Fullscreen Mode Required</h2>
+            <div className="fullscreen-initial-message">
+              <p>This quiz requires fullscreen mode to maintain academic integrity. Please click the button below to enter fullscreen mode and begin the quiz.</p>
+              <p>Important: Exiting fullscreen during the test will pause the timer and give you 10 seconds to return. If you don't return to fullscreen within this time, your quiz will be automatically submitted.</p>
+            </div>
+            <button className="fullscreen-initial-button" onClick={enterFullscreenMode}>
+              Enter Fullscreen & Begin Quiz
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="quiz-page">
-      <QuizContainer>
+      {/* Fullscreen Exit Warning Overlay */}
+      <div className="fullscreen-warning-container" ref={fullscreenWarningRef}>
+        <div className="fullscreen-warning">
+          <div className="fullscreen-warning-icon">⚠️</div>
+          <h2 className="fullscreen-warning-title">Fullscreen Mode Required</h2>
+          <p className="fullscreen-warning-message">
+            You have exited fullscreen mode. The quiz timer has been paused.
+            Please return to fullscreen mode to continue with your quiz.
+          </p>
+          <div className="fullscreen-warning-timer">10</div>
+          <p>Your quiz will be automatically submitted if you don't return to fullscreen.</p>
+          <button 
+            className="fullscreen-warning-button" 
+            onClick={() => quizSecurity.enterFullscreen(document.documentElement)}>
+            Return to Fullscreen
+          </button>
+        </div>
+      </div>
+
+      <QuizContainer ref={quizContainerRef}>
         <DecorativeCircle className="top-right" />
         <DecorativeCircle className="bottom-left" />
         
