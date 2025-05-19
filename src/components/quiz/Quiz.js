@@ -381,13 +381,14 @@ const Quiz = () => {
       
       // Setup fullscreen security features
       setupQuizSecurity();
-      
-      return () => {
+        return () => {
         if (countdown) clearInterval(countdown);
         quizSecurity.deactivate();
       };
     }
-  }, [currentQuestionIndex, quizData, timerPaused]); // eslint-disable-line react-hooks/exhaustive-deps  // Set up quiz security with fullscreen features
+  }, [currentQuestionIndex, quizData, timerPaused]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Set up quiz security with fullscreen features
   const setupQuizSecurity = () => {
     // Check if fullscreen is required - if we're no longer showing the prompt and we're in fullscreen,
     // then fullscreen is required. Otherwise, the user opted to continue without fullscreen.
@@ -604,11 +605,9 @@ const Quiz = () => {
   if (showFullscreenPrompt) {
     return (
       <div className="quiz-page">
-        <div className="fullscreen-initial-message">
-          <div className="fullscreen-initial-content">
-            <div className="fullscreen-initial-icon">⚠️</div>
+        <div className="fullscreen-initial-message">          <div className="fullscreen-initial-content">            <div className="fullscreen-initial-icon">⚠️</div>
             <h2 className="fullscreen-initial-title">Fullscreen Mode Required</h2>
-            <div className="fullscreen-initial-message">
+            <div className="fullscreen-initial-text-content">
               <p>This quiz requires fullscreen mode to maintain academic integrity. Please click the button below to enter fullscreen mode and begin the quiz.</p>
               <p>Important: Exiting fullscreen during the test will pause the timer and give you 10 seconds to return. If you don't return to fullscreen within this time, your quiz will be automatically submitted.</p>
             </div>
