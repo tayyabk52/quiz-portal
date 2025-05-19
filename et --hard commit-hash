@@ -1,0 +1,44 @@
+[33m0d3540d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Fix quiz interface issues in fullscreen mode
+[33md936371[m Fix quiz interface issues in fullscreen mode
+[33mfa90ffc[m Improve quiz interface in fullscreen mode - Fix container sizing and spacing for better visibility of all elements
+[33m45db07b[m Fix ESLint errors: Use window.history and window.screen instead of globals
+[33m536709a[m Fix syntax error in Quiz.js causing build failure
+[33m52bee77[m Implement robust fullscreen security for quiz portal with screen lock, keyboard shortcut blocking, and security notifications
+[33m1c019cf[m Full screen add
+[33m6a9cdf9[m Fix keyframes animation error by removing animation from styled-components and using CSS animation classes instead
+[33m654769f[m Fix styled-components keyframes animation syntax in Timer component
+[33m854fb32[m Update Login.js content display for LogoIndicator
+[33m0b8a7e3[m Finalize Quiz.css styling improvements
+[33mc228eb7[m Enhanced quiz page with modern UI and visual improvements
+[33md752522[m Fix Instructions.css styling
+[33ma12ec61[m Enhanced quiz instructions page with modern UI and visual improvements
+[33md36efb9[m Improve login page styling with modern UI enhancements
+[33mb2d7f6c[m Fix: removed duplicate import of signInWithEmailAndPassword
+[33m3f884e4[m Fix: removed duplicate import of signInWithEmailAndPassword
+[33mff5e99c[m Fix: removed duplicate import of signInWithEmailAndPassword
+[33mbfab353[m Fix: removed duplicate import of signInWithEmailAndPassword
+[33m5d7cfe6[m Fix: removed duplicate import of signInWithEmailAndPassword
+[33m691e2c3[m Fix: removed duplicate import of signInWithEmailAndPassword
+[33m62db8ef[m Fix: removed duplicate import of signInWithEmailAndPassword
+[33me9bcc96[m Fix: added missing signInWithEmailAndPassword import
+[33m5225a88[m Fix: added missing signInWithEmailAndPassword import
+[33m02f7914[m Add functionality to display all users from Firebase Authentication in admin portal
+[33md44aad8[m Update config.js
+[33m7dcde9f[m Add enhanced user management features to admin portal: bulk user removal, search functionality, and password reset capability
+[33m242bb4e[m Fix email validation regex in CSV user import
+[33m052c2f8[m Fix CSV parsing issues in user import feature
+[33m5e61c9f[m Add bulk user import feature for admin portal
+[33m7dda619[m Fix undefined variable in ImageLoader component
+[33me9daeb8[m Fix undefined variable in ImageLoader component
+[33m3d579ea[m Fix image loading with CSP compatibility and add placeholders
+[33m0bbe411[m Improve image loading with robust CORS proxy and better error handling
+[33m7a22fe1[m Fix Google Drive image display with progressive loading & multiple URL format fallbacks
+[33m63abc44[m Enhance quiz results display: Add question details, points tracking, and answer review
+[33m5a9f151[m Fix admin functionality: Update Google Drive image handling, add View Details functionality, implement CSV export for results
+[33m9183ee2[m Fix timer, Google Drive image loading, and add one-time quiz attempt restriction
+[33m3e2ba53[m Fix login to support both username and full email formats
+[33mfd13915[m all updated
+[33mdcf070e[m Fix Netlify configuration by setting base directory to root
+[33m9329cd9[m Fix Netlify build configuration by setting correct base directory
+[33m079465e[m Fix authentication errors, update Firebase config, add scripts and documentation
+[33m1ec7bfb[m Initial commit
