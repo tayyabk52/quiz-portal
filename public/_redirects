@@ -4,6 +4,7 @@
 /api/users              /.netlify/functions/users              200
 /api/users/reset-password  /.netlify/functions/reset-password  200
 /api/users/bulk-delete  /.netlify/functions/bulk-delete-users  200
+/api/users/bulk-create  /.netlify/functions/bulk-create-users  200
 /api/users/update       /.netlify/functions/update-user        200
 /api/users/*            /.netlify/functions/delete-user/:splat 200
 

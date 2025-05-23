@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { createMultipleUsers, resetUserPassword, syncUsersToFirestore, deleteUsers, auth, db } from '../../firebase/config';
+import { resetUserPassword, syncUsersToFirestore, deleteUsers, auth, db } from '../../firebase/config';
 import { parseStudentAccountsFromCSV, validateUserData } from '../../utils/csvUtils';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
@@ -810,7 +810,6 @@ const UserManagementSection = () => {
     };
     reader.readAsText(file);
   };
-
   const handleImportUsers = async () => {
     if (!validationResults?.validUsers || validationResults.validUsers.length === 0) {
       setImportStatus({
@@ -829,26 +828,59 @@ const UserManagementSection = () => {
     });
 
     try {
-      // Progress callback function
-      const onProgress = (progressData) => {
-        const progressPercent = Math.round((progressData.processed / progressData.total) * 100);
+      // Get current user's ID token for authentication
+      const idToken = await auth.currentUser.getIdToken(true);
+      
+      // Process users in batches to avoid timeouts
+      const BATCH_SIZE = 20;
+      const allResults = {
+        successful: [],
+        failed: [],
+        total: validationResults.validUsers.length
+      };
+      
+      // Split users into batches
+      const batches = [];
+      for (let i = 0; i < validationResults.validUsers.length; i += BATCH_SIZE) {
+        batches.push(validationResults.validUsers.slice(i, i + BATCH_SIZE));
+      }
+      
+      // Process each batch
+      for (let i = 0; i < batches.length; i++) {
+        const batchUsers = batches[i];
         setImportStatus(prev => ({
           ...prev,
-          progress: progressPercent,
-          message: `Processed ${progressData.processed} of ${progressData.total} (${progressData.current})`,
-          error: progressData.error || null
+          progress: Math.round((i / batches.length) * 90), // Reserve 10% for final processing
+          message: `Processing batch ${i+1}/${batches.length} (${batchUsers.length} users)...`
         }));
-      };
-
-      // Create users
-      const results = await createMultipleUsers(validationResults.validUsers, onProgress);
+        
+        // Call the bulk create API endpoint for this batch
+        const response = await fetch(`${API_URL}/users/bulk-create`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${idToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ users: batchUsers })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+        
+        const batchResults = await response.json();
+        
+        // Combine batch results with overall results
+        allResults.successful = [...allResults.successful, ...batchResults.successful];
+        allResults.failed = [...allResults.failed, ...batchResults.failed];
+      }
       
       setImportStatus({
         isImporting: false,
         progress: 100,
-        message: `Import completed! Successfully created ${results.successful.length} out of ${results.total} accounts.`,
+        message: `Import completed! Successfully created ${allResults.successful.length} out of ${allResults.total} accounts.`,
         error: null,
-        results: results
+        results: allResults
       });
     } catch (error) {
       setImportStatus({
@@ -857,7 +889,7 @@ const UserManagementSection = () => {
         error: `Import failed: ${error.message}`
       });
     }
-  };  // Render the users from CSV file for import
+  };// Render the users from CSV file for import
   const renderUserTable = () => {
     console.log('Rendering user table, parsedData:', parsedData ? 
       `${parsedData.length} users available` : 'No data available');
