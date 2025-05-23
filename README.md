@@ -2,6 +2,8 @@
 
 An interactive quiz web portal built with React, Firebase, and hosted on Netlify. This application provides a secure environment for students to take quizzes with features like image-based questions, time limits, authentication, and security measures.
 
+**Last updated: May 23, 2025**
+
 ## Features
 
 ### Authentication
