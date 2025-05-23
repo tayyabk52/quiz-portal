@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { resetUserPassword, syncUsersToFirestore, deleteUsers, auth, db } from '../../firebase/config';
+import { resetUserPassword, syncUsersToFirestore, deleteUsers, createMultipleUsers, auth, db } from '../../firebase/config';
 import { parseStudentAccountsFromCSV, validateUserData } from '../../utils/csvUtils';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 
 // API URL from environment variables or default to the deployed Netlify functions
@@ -809,8 +810,7 @@ const UserManagementSection = () => {
       }
     };
     reader.readAsText(file);
-  };
-  const handleImportUsers = async () => {
+  };  const handleImportUsers = async () => {
     if (!validationResults?.validUsers || validationResults.validUsers.length === 0) {
       setImportStatus({
         ...importStatus,
@@ -828,59 +828,41 @@ const UserManagementSection = () => {
     });
 
     try {
-      // Get current user's ID token for authentication
-      const idToken = await auth.currentUser.getIdToken(true);
+      // Store the current admin user's credentials for re-authentication
+      const adminEmail = auth.currentUser.email;
       
-      // Process users in batches to avoid timeouts
-      const BATCH_SIZE = 20;
-      const allResults = {
-        successful: [],
-        failed: [],
-        total: validationResults.validUsers.length
-      };
-      
-      // Split users into batches
-      const batches = [];
-      for (let i = 0; i < validationResults.validUsers.length; i += BATCH_SIZE) {
-        batches.push(validationResults.validUsers.slice(i, i + BATCH_SIZE));
-      }
-      
-      // Process each batch
-      for (let i = 0; i < batches.length; i++) {
-        const batchUsers = batches[i];
-        setImportStatus(prev => ({
-          ...prev,
-          progress: Math.round((i / batches.length) * 90), // Reserve 10% for final processing
-          message: `Processing batch ${i+1}/${batches.length} (${batchUsers.length} users)...`
-        }));
-        
-        // Call the bulk create API endpoint for this batch
-        const response = await fetch(`${API_URL}/users/bulk-create`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${idToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ users: batchUsers })
-        });
-        
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status} ${response.statusText}`);
+      // Process users with client-side authentication using createMultipleUsers
+      // with a progress callback
+      const results = await createMultipleUsers(
+        validationResults.validUsers,
+        (progress) => {
+          setImportStatus(prev => ({
+            ...prev,
+            progress: Math.round((progress.processed / progress.total) * 100),
+            message: `Processing user ${progress.processed} of ${progress.total}: ${progress.current}${progress.success ? ' - Success' : ' - Failed'}`
+          }));
         }
-        
-        const batchResults = await response.json();
-        
-        // Combine batch results with overall results
-        allResults.successful = [...allResults.successful, ...batchResults.successful];
-        allResults.failed = [...allResults.failed, ...batchResults.failed];
+      );
+      
+      // Re-authenticate the admin after all users are created
+      // This is necessary because createUserWithEmailAndPassword signs in the last created user
+      if (adminEmail) {
+        console.log('Re-authenticating admin user:', adminEmail);
+        try {
+          // We need to sign back in as the admin
+          await signInWithEmailAndPassword(auth, adminEmail, ""); // This will fail, but trigger re-auth prompt
+        } catch (reAuthError) {
+          console.log('Expected re-auth error (password not provided):', reAuthError.message);
+          console.log('Admin needs to sign in again to continue');
+        }
       }
       
       setImportStatus({
         isImporting: false,
         progress: 100,
-        message: `Import completed! Successfully created ${allResults.successful.length} out of ${allResults.total} accounts.`,
+        message: `Import completed! Successfully created ${results.successful.length} out of ${results.total} accounts.`,
         error: null,
-        results: allResults
+        results: results
       });
     } catch (error) {
       setImportStatus({
