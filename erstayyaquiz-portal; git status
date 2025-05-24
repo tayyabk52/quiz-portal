@@ -1,0 +1,131 @@
+[1mdiff --git a/src/components/admin/Admin.js b/src/components/admin/Admin.js[m
+[1mindex 4531a66..24a5a0c 100644[m
+[1m--- a/src/components/admin/Admin.js[m
+[1m+++ b/src/components/admin/Admin.js[m
+[36m@@ -283,47 +283,112 @@[m [mconst Admin = () => {[m
+     const secs = Math.round(seconds % 60);[m
+     return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');[m
+   };[m
+[31m-    // Export results to CSV file[m
+[32m+[m[32m  // Export results to CSV file[m
+   const exportResultsToCSV = () => {[m
+     if (results.length === 0) {[m
+       alert('No results to export');[m
+       return;[m
+     }[m
+     [m
+[31m-    // Create CSV headers[m
+[31m-    let csvContent = "User Email,Points,Max Possible Points,Percentage,Date,Correct Answers,Total Questions,Time Taken\n";[m
+[32m+[m[32m    // Helper function to escape CSV values[m
+[32m+[m[32m    const escapeCSV = (value) => {[m
+[32m+[m[32m      if (value === null || value === undefined) return 'N/A';[m
+[32m+[m[32m      const str = String(value);[m
+[32m+[m[32m      // Escape quotes and wrap in quotes if contains comma, quote, or newline[m
+[32m+[m[32m      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {[m
+[32m+[m[32m        return '"' + str.replace(/"/g, '""') + '"';[m
+[32m+[m[32m      }[m
+[32m+[m[32m      return str;[m
+[32m+[m[32m    };[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Create comprehensive CSV headers[m
+[32m+[m[32m    const headers = [[m
+[32m+[m[32m      // Basic Information[m
+[32m+[m[32m      'User Email',[m
+[32m+[m[32m      'User ID',[m
+[32m+[m[32m      'Submission Date',[m
+[32m+[m[32m      'Completion Time',[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Scoring Summary[m
+[32m+[m[32m      'Score Percentage',[m
+[32m+[m[32m      'Points Earned',[m
+[32m+[m[32m      'Max Possible Points',[m
+[32m+[m[32m      'Correct Answers',[m
+[32m+[m[32m      'Total Questions',[m
+[32m+[m[32m      'Time Taken',[m
+[32m+[m[32m      'Pass/Fail Status',[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Question-by-Question Analysis[m
+[32m+[m[32m      'Question Details (Q# | Question | Your Answer | Correct Answer | Result | Points)'[m
+[32m+[m[32m    ];[m
+[32m+[m[41m    [m
+[32m+[m[32m    let csvContent = headers.join(',') + '\n';[m
+     [m
+     // Add row for each result[m
+     results.forEach(result => {[m
+[31m-      const dateStr = result.submittedAt ? [m
+[32m+[m[32m      const submissionDate = result.submittedAt ?[m[41m [m
+         new Date(result.submittedAt.seconds * 1000).toLocaleString() : 'N/A';[m
+[32m+[m[32m      const completionTime = result.completionTime ?[m[41m [m
+[32m+[m[32m        new Date(result.completionTime.seconds * 1000).toLocaleString() : 'N/A';[m
+       const timeTaken = result.timeTaken ? formatTime(result.timeTaken) : 'N/A';[m
+       const score = result.totalPoints ? Math.round(result.scorePercentage) : Math.round(result.score);[m
+       const points = result.totalPoints || 'N/A';[m
+       const maxPoints = result.maxPossiblePoints || 'N/A';[m
+[32m+[m[32m      const passStatus = score >= 70 ? 'PASS' : 'FAIL';[m
+       [m
+[31m-      csvContent += '"' + result.userEmail + '",' + [m
+[31m-                   points + ',' +[m
+[31m-                   maxPoints + ',' +[m
+[31m-                   score + '%,"' + [m
+[31m-                   dateStr + '",' + [m
+[31m-                   result.correctAnswers + ',' + [m
+[31m-                   result.totalQuestions + ',"' + [m
+[31m-                   timeTaken + '"\n';[m
+[32m+[m[32m      // Format question-by-question details[m
+[32m+[m[32m      let questionDetails = '';[m
+[32m+[m[32m      if (result.answers && Array.isArray(result.answers) && result.answers.length > 0) {[m
+[32m+[m[32m        questionDetails = result.answers.map((answer, index) => {[m
+[32m+[m[32m          const qNum = index + 1;[m
+[32m+[m[32m          const question = (answer.question || 'Question not available').substring(0, 50) + '...';[m
+[32m+[m[32m          const selectedAnswer = answer.selected || 'No answer selected';[m
+[32m+[m[32m          const correctAnswer = answer.correctAnswer || 'N/A';[m
+[32m+[m[32m          const isCorrect = answer.correct ? 'CORRECT' : 'INCORRECT';[m
+[32m+[m[32m          const questionPoints = `${answer.score || 0}/${answer.maxScore || 1}`;[m
+[32m+[m[41m          [m
+[32m+[m[32m          return `Q${qNum}: ${question} | Your: ${selectedAnswer} | Correct: ${correctAnswer} | ${isCorrect} | ${questionPoints} pts`;[m
+[32m+[m[32m        }).join(' || ');[m
+[32m+[m[32m      } else {[m
+[32m+[m[32m        questionDetails = 'Detailed answers not available';[m
+[32m+[m[32m      }[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Build the row data[m
+[32m+[m[32m      const rowData = [[m
+[32m+[m[32m        result.userEmail || 'N/A',[m
+[32m+[m[32m        result.userId || 'N/A',[m
+[32m+[m[32m        submissionDate,[m
+[32m+[m[32m        completionTime,[m
+[32m+[m[32m        score + '%',[m
+[32m+[m[32m        points,[m
+[32m+[m[32m        maxPoints,[m
+[32m+[m[32m        result.correctAnswers || 0,[m
+[32m+[m[32m        result.totalQuestions || 0,[m
+[32m+[m[32m        timeTaken,[m
+[32m+[m[32m        passStatus,[m
+[32m+[m[32m        questionDetails[m
+[32m+[m[32m      ];[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Add escaped row to CSV content[m
+[32m+[m[32m      csvContent += rowData.map(escapeCSV).join(',') + '\n';[m
+     });[m
+     [m
+     // Create a blob and download link[m
+[31m-    const blob = new Blob([csvContent], { type: 'text/csv' });[m
+[32m+[m[32m    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });[m
+     const url = URL.createObjectURL(blob);[m
+     const link = document.createElement('a');[m
+     [m
+[32m+[m[32m    const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-');[m
+     link.setAttribute('href', url);[m
+[31m-    link.setAttribute('download', 'quiz_results_' + new Date().toISOString().slice(0,10) + '.csv');[m
+[32m+[m[32m    link.setAttribute('download', `quiz_results_comprehensive_${timestamp}.csv`);[m
+     link.style.display = 'none';[m
+     [m
+     document.body.appendChild(link);[m
+     link.click();[m
+     document.body.removeChild(link);[m
+[32m+[m[41m    [m
+[32m+[m[32m    // Clean up[m
+[32m+[m[32m    URL.revokeObjectURL(url);[m
+   };[m
+   [m
+   // Fetch questions and results from Firebase[m

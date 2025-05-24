@@ -283,47 +283,112 @@ const Admin = () => {
     const secs = Math.round(seconds % 60);
     return mins.toString().padStart(2, '0') + ':' + secs.toString().padStart(2, '0');
   };
-    // Export results to CSV file
+  // Export results to CSV file
   const exportResultsToCSV = () => {
     if (results.length === 0) {
       alert('No results to export');
       return;
     }
     
-    // Create CSV headers
-    let csvContent = "User Email,Points,Max Possible Points,Percentage,Date,Correct Answers,Total Questions,Time Taken\n";
+    // Helper function to escape CSV values
+    const escapeCSV = (value) => {
+      if (value === null || value === undefined) return 'N/A';
+      const str = String(value);
+      // Escape quotes and wrap in quotes if contains comma, quote, or newline
+      if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+    
+    // Create comprehensive CSV headers
+    const headers = [
+      // Basic Information
+      'User Email',
+      'User ID',
+      'Submission Date',
+      'Completion Time',
+      
+      // Scoring Summary
+      'Score Percentage',
+      'Points Earned',
+      'Max Possible Points',
+      'Correct Answers',
+      'Total Questions',
+      'Time Taken',
+      'Pass/Fail Status',
+      
+      // Question-by-Question Analysis
+      'Question Details (Q# | Question | Your Answer | Correct Answer | Result | Points)'
+    ];
+    
+    let csvContent = headers.join(',') + '\n';
     
     // Add row for each result
     results.forEach(result => {
-      const dateStr = result.submittedAt ? 
+      const submissionDate = result.submittedAt ? 
         new Date(result.submittedAt.seconds * 1000).toLocaleString() : 'N/A';
+      const completionTime = result.completionTime ? 
+        new Date(result.completionTime.seconds * 1000).toLocaleString() : 'N/A';
       const timeTaken = result.timeTaken ? formatTime(result.timeTaken) : 'N/A';
       const score = result.totalPoints ? Math.round(result.scorePercentage) : Math.round(result.score);
       const points = result.totalPoints || 'N/A';
       const maxPoints = result.maxPossiblePoints || 'N/A';
+      const passStatus = score >= 70 ? 'PASS' : 'FAIL';
       
-      csvContent += '"' + result.userEmail + '",' + 
-                   points + ',' +
-                   maxPoints + ',' +
-                   score + '%,"' + 
-                   dateStr + '",' + 
-                   result.correctAnswers + ',' + 
-                   result.totalQuestions + ',"' + 
-                   timeTaken + '"\n';
+      // Format question-by-question details
+      let questionDetails = '';
+      if (result.answers && Array.isArray(result.answers) && result.answers.length > 0) {
+        questionDetails = result.answers.map((answer, index) => {
+          const qNum = index + 1;
+          const question = (answer.question || 'Question not available').substring(0, 50) + '...';
+          const selectedAnswer = answer.selected || 'No answer selected';
+          const correctAnswer = answer.correctAnswer || 'N/A';
+          const isCorrect = answer.correct ? 'CORRECT' : 'INCORRECT';
+          const questionPoints = `${answer.score || 0}/${answer.maxScore || 1}`;
+          
+          return `Q${qNum}: ${question} | Your: ${selectedAnswer} | Correct: ${correctAnswer} | ${isCorrect} | ${questionPoints} pts`;
+        }).join(' || ');
+      } else {
+        questionDetails = 'Detailed answers not available';
+      }
+      
+      // Build the row data
+      const rowData = [
+        result.userEmail || 'N/A',
+        result.userId || 'N/A',
+        submissionDate,
+        completionTime,
+        score + '%',
+        points,
+        maxPoints,
+        result.correctAnswers || 0,
+        result.totalQuestions || 0,
+        timeTaken,
+        passStatus,
+        questionDetails
+      ];
+      
+      // Add escaped row to CSV content
+      csvContent += rowData.map(escapeCSV).join(',') + '\n';
     });
     
     // Create a blob and download link
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     
+    const timestamp = new Date().toISOString().slice(0,19).replace(/:/g, '-');
     link.setAttribute('href', url);
-    link.setAttribute('download', 'quiz_results_' + new Date().toISOString().slice(0,10) + '.csv');
+    link.setAttribute('download', `quiz_results_comprehensive_${timestamp}.csv`);
     link.style.display = 'none';
     
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // Clean up
+    URL.revokeObjectURL(url);
   };
   
   // Fetch questions and results from Firebase
